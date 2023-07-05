@@ -1,5 +1,7 @@
 //! NVIDIA NGX.
 
+#![deny(missing_docs)]
+
 use crate::bindings;
 pub mod vk;
 

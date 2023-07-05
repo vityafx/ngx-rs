@@ -43,6 +43,7 @@ fn main() {
     // shared library.
     // println!("cargo:rustc-link-lib={DLSS_LIBRARY_FILE_NAME}");
     println!("cargo:rustc-link-lib=nvsdk_ngx");
+    println!("cargo:rustc-link-lib=stdc++");
 
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed={HEADER_FILE_PATH}");

@@ -1,4 +1,4 @@
-mod bindings {
+pub mod bindings {
     #![allow(non_upper_case_globals)]
     #![allow(non_camel_case_types)]
     #![allow(non_snake_case)]
@@ -8,6 +8,7 @@ mod bindings {
 }
 
 pub mod ngx;
+pub use ngx::*;
 
 impl std::fmt::Display for bindings::NVSDK_NGX_Result {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -16,7 +17,11 @@ impl std::fmt::Display for bindings::NVSDK_NGX_Result {
         let string = unsafe { widestring::WideCString::from_ptr(chars.cast(), length) }
             .map_err(|_| std::fmt::Error)?;
         let string = string.to_string().map_err(|_| std::fmt::Error)?;
-        f.write_str(&string)
+        f.write_str(&string)?;
+        // unsafe {
+        //     libc::free(chars as *mut _);
+        // }
+        Ok(())
     }
 }
 

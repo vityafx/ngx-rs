@@ -1,5 +1,5 @@
 [package]
-name = "ngx-rs"
+name = "ngx"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,3 +12,4 @@ widestring = "1"
 libc = "0.2"
 ash = "*"
 log = "0.4"
+uuid = { version = "1", features = ["v4"] }
