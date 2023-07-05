@@ -1,0 +1,3 @@
+[submodule "DLSS"]
+	path = DLSS
+	url = gitea@git.thefx.co:fx/DLSS.git
