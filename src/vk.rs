@@ -116,6 +116,7 @@ where
 }
 
 /// NVIDIA NGX system.
+#[repr(transparent)]
 #[derive(Debug)]
 pub struct System {
     device: vk::Device,
@@ -227,14 +228,21 @@ impl System {
     pub fn create_super_sampling_feature(
         &self,
         command_buffer: vk::CommandBuffer,
-        parameters: Option<FeatureParameters>,
+        feature_parameters: FeatureParameters,
+        create_parameters: SuperSamplingCreateParameters,
     ) -> Result<SuperSamplingFeature> {
-        self.create_feature(
+        Feature::new_super_sampling(
+            self.device,
             command_buffer,
-            bindings::NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling,
-            parameters,
+            feature_parameters,
+            create_parameters,
         )
-        .map(|f| unsafe { SuperSamplingFeature::from_feature_unchecked(f) })
+        // self.create_feature(
+        //     command_buffer,
+        //     bindings::NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling,
+        //     parameters,
+        // )
+        // .map(|f| unsafe { SuperSamplingFeature::from_feature_unchecked(f) })
     }
 }
 
@@ -247,6 +255,7 @@ impl Drop for System {
 }
 
 /// An NGX handle. Handle might be created and used by [`Feature::create`].
+#[repr(transparent)]
 #[derive(Debug)]
 struct FeatureHandle(*mut bindings::NVSDK_NGX_Handle);
 
@@ -329,10 +338,12 @@ macro_rules! insert_parameter_debug {
 }
 
 /// Feature parameters is a collection of parameters of a feature (ha!).
+#[repr(transparent)]
 pub struct FeatureParameters(*mut bindings::NVSDK_NGX_Parameter);
 
 impl std::fmt::Debug for FeatureParameters {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        #[repr(transparent)]
         struct FeatureParametersDebugPrinter<'a>(&'a FeatureParameters);
 
         impl<'a> std::fmt::Debug for FeatureParametersDebugPrinter<'a> {
@@ -672,6 +683,37 @@ impl Feature {
         })
     }
 
+    /// Creates a new SuperSampling feature.
+    pub fn new_super_sampling(
+        device: vk::Device,
+        command_buffer: vk::CommandBuffer,
+        parameters: FeatureParameters,
+        mut super_sampling_create_parameters: SuperSamplingCreateParameters,
+    ) -> Result<SuperSamplingFeature> {
+        let feature_type = bindings::NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling;
+        unsafe {
+            let mut handle = FeatureHandle::new(std::ptr::null_mut());
+            Result::from(unsafe {
+                bindings::HELPERS_NGX_VULKAN_CREATE_DLSS_EXT1(
+                    device.to_pointer_mut(),
+                    command_buffer.to_pointer_mut(),
+                    1,
+                    1,
+                    &mut handle.0 as *mut _,
+                    parameters.0,
+                    &mut super_sampling_create_parameters.0 as *mut _,
+                )
+            })
+            .map(|_| {
+                SuperSamplingFeature::from_feature_unchecked(Self {
+                    handle,
+                    feature_type,
+                    parameters,
+                })
+            })
+        }
+    }
+
     /// Returns the parameters associated with this feature.
     pub fn get_parameters(&self) -> &FeatureParameters {
         &self.parameters
@@ -729,6 +771,7 @@ impl Feature {
 }
 
 /// Describes a set of NGX feature requirements.
+#[repr(transparent)]
 #[derive(Debug)]
 pub struct FeatureRequirement(bindings::NVSDK_NGX_FeatureRequirement);
 
@@ -811,7 +854,88 @@ impl SuperSamplingOptimalSettings {
     }
 }
 
+/// Create parameters for the SuperSampling feature.
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct SuperSamplingCreateParameters(bindings::NVSDK_NGX_DLSS_Create_Params);
+
+impl SuperSamplingCreateParameters {
+    /// Creates a new set of create parameters for the SuperSampling
+    /// feature.
+    pub fn new(
+        render_width: u32,
+        render_height: u32,
+        target_width: u32,
+        target_height: u32,
+        quality_value: Option<bindings::NVSDK_NGX_PerfQuality_Value>,
+        flags: Option<bindings::NVSDK_NGX_DLSS_Feature_Flags>,
+    ) -> Self {
+        let mut params: bindings::NVSDK_NGX_DLSS_Create_Params = unsafe { std::mem::zeroed() };
+        params.Feature.InWidth = render_width;
+        params.Feature.InHeight = render_height;
+        params.Feature.InTargetWidth = target_width;
+        params.Feature.InTargetHeight = target_height;
+        if let Some(quality_value) = quality_value {
+            params.Feature.InPerfQualityValue = quality_value;
+        }
+        params.InFeatureCreateFlags = flags.map(|f| f as i32).unwrap_or(0);
+        Self(params)
+    }
+}
+
+impl From<SuperSamplingOptimalSettings> for SuperSamplingCreateParameters {
+    fn from(value: SuperSamplingOptimalSettings) -> Self {
+        Self::new(
+            value.render_width,
+            value.render_height,
+            value.target_width,
+            value.target_height,
+            Some(value.desired_quality_level),
+            None,
+        )
+    }
+}
+
+/// Only mandatory parameters for the SuperSampling feature evaluation.
+#[derive(Debug, derive_builder::Builder)]
+pub struct SuperSamplingEvaluationParametersSimple {
+    /// The feature evaluation parameters, specific to Vulkan.
+    feature_evaluation_parameters: bindings::NVSDK_NGX_VK_Feature_Eval_Params,
+    /// The depth information.
+    depth: bindings::NVSDK_NGX_Resource_VK,
+    /// The motion vectors.
+    motion_vectors: bindings::NVSDK_NGX_Resource_VK,
+    /// Jitter offset x.
+    jitter_offset_x: f32,
+    /// Jitter offset y.
+    jitter_offset_y: f32,
+    /// The dimensions of the viewport.
+    dimensions: bindings::NVSDK_NGX_Dimensions,
+}
+
+// impl From<SuperSamplingEvaluationParametersSimple> for SuperSamplingEvaluationParameters {
+//     fn from(value: SuperSamplingEvaluationParametersSimple) -> Self {
+//         let mut params: bindings::NVSDK_NGX_VK_DLSS_Eval_Params = unsafe { std::mem::zeroed() };
+//         params.Feature = value.feature_evaluation_parameters;
+//         params.pInDepth = value.depth;
+//         Self(params)
+//     }
+// }
+
+/// The SuperSampling evaluation parameters.
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct SuperSamplingEvaluationParameters(bindings::NVSDK_NGX_VK_DLSS_Eval_Params);
+
+// impl SuperSamplingEvaluationParameters {
+//     /// Returns a builder to build the parameters.
+//     pub fn builder() -> SuperSamplingEvaluationParametersSimple {
+//         SuperSamplingEvaluationParametersSimpleBuilder::default()
+//     }
+// }
+
 /// A SuperSamling (or "DLSS") feature.
+#[repr(transparent)]
 #[derive(Debug)]
 pub struct SuperSamplingFeature(Feature);
 
@@ -843,6 +967,23 @@ impl SuperSamplingFeature {
     /// See [`FeatureParameters::is_super_sampling_initialised`].
     pub fn is_initialised(&self) -> bool {
         self.0.get_parameters().is_super_sampling_initialised()
+    }
+
+    /// Evaluates the feature.
+    pub fn evaluate(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        parameters: SuperSamplingEvaluationParameters,
+    ) -> Result {
+        unimplemented!()
+        // Result::from(unsafe {
+        //     bindings::HELPERS_NGX_VULKAN_EVALUATE_DLSS_EXT(
+        //         command_buffer.as_raw(),
+        //         self.0.handle.0,
+        //         self.0.parameters.0,
+        //         parameters.0,
+        //     )
+        // })
     }
 }
 
