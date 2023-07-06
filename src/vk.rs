@@ -223,8 +223,8 @@ impl System {
         Feature::new(self.device, command_buffer, feature_type, parameters)
     }
 
-    /// Creates a supersampling feature.
-    pub fn create_supersampling_feature(
+    /// Creates a supersampling (or "DLSS") feature.
+    pub fn create_super_sampling_feature(
         &self,
         command_buffer: vk::CommandBuffer,
         parameters: Option<FeatureParameters>,
@@ -329,7 +329,6 @@ macro_rules! insert_parameter_debug {
 }
 
 /// Feature parameters is a collection of parameters of a feature (ha!).
-// #[derive(Debug)]
 pub struct FeatureParameters(*mut bindings::NVSDK_NGX_Parameter);
 
 impl std::fmt::Debug for FeatureParameters {
@@ -616,6 +615,13 @@ impl FeatureParameters {
         Self::get_capability_parameters()?.supports_super_sampling()
     }
 
+    /// Returns `true` if the SuperSampling feature is initialised
+    /// correctly.
+    pub fn is_super_sampling_initialised(&self) -> bool {
+        self.get_bool(bindings::NVSDK_NGX_Parameter_SuperSampling_FeatureInitResult)
+            .unwrap_or(false)
+    }
+
     /// Deallocates the feature parameter set.
     fn release(&self) -> Result {
         unsafe { bindings::NVSDK_NGX_VULKAN_DestroyParameters(self.0) }.into()
@@ -729,6 +735,82 @@ pub struct FeatureRequirement(bindings::NVSDK_NGX_FeatureRequirement);
 /// A helpful type alias to quickly mention "DLSS".
 pub type DlssFeature = SuperSamplingFeature;
 
+/// Optimal settings for the DLSS based on the desired quality level and
+/// resolution.
+#[derive(Debug)]
+pub struct SuperSamplingOptimalSettings {
+    /// The render width which the renderer must render to before
+    /// upscaling.
+    pub render_width: u32,
+    /// The render height which the renderer must render to before
+    /// upscaling.
+    pub render_height: u32,
+    /// The target width desired, to which the SuperSampling feature
+    /// will upscale to.
+    pub target_width: u32,
+    /// The target height desired, to which the SuperSampling feature
+    /// will upscale to.
+    pub target_height: u32,
+    /// The requested quality level.
+    pub desired_quality_level: bindings::NVSDK_NGX_PerfQuality_Value,
+    /// TODO:
+    pub dynamic_min_render_width: u32,
+    /// TODO:
+    pub dynamic_max_render_width: u32,
+    /// TODO:
+    pub dynamic_min_render_height: u32,
+    /// TODO:
+    pub dynamic_max_render_height: u32,
+}
+
+impl SuperSamplingOptimalSettings {
+    /// Returns a set of optimal settings for the desired parameter
+    /// set, render dimensions and quality level.
+    pub fn get_optimal_settings(
+        parameters: &FeatureParameters,
+        target_width: u32,
+        target_height: u32,
+        desired_quality_level: bindings::NVSDK_NGX_PerfQuality_Value,
+    ) -> Result<Self> {
+        let mut settings = Self {
+            render_width: 0,
+            render_height: 0,
+            target_width,
+            target_height,
+            desired_quality_level,
+            dynamic_min_render_width: 0,
+            dynamic_max_render_width: 0,
+            dynamic_min_render_height: 0,
+            dynamic_max_render_height: 0,
+        };
+        // The sharpness is deprecated, should stay zero.
+        let mut sharpness = 0.0f32;
+        Result::from(unsafe {
+            bindings::HELPERS_NGX_DLSS_GET_OPTIMAL_SETTINGS(
+                parameters.0,
+                settings.target_width,
+                settings.target_height,
+                settings.desired_quality_level,
+                &mut settings.render_width as *mut _,
+                &mut settings.render_height as *mut _,
+                &mut settings.dynamic_max_render_width as *mut _,
+                &mut settings.dynamic_max_render_height as *mut _,
+                &mut settings.dynamic_min_render_width as *mut _,
+                &mut settings.dynamic_min_render_height as *mut _,
+                &mut sharpness as *mut _,
+            )
+        })?;
+
+        if settings.render_height == 0 || settings.render_width == 0 {
+            return Err(crate::Error::Other(format!(
+                "The requested quality level isn't supported."
+            )));
+        }
+
+        Ok(settings)
+    }
+}
+
 /// A SuperSamling (or "DLSS") feature.
 #[derive(Debug)]
 pub struct SuperSamplingFeature(Feature);
@@ -756,6 +838,11 @@ impl SuperSamplingFeature {
     /// For the safe and checked version use [`std::convert::TryFrom`].
     pub unsafe fn from_feature_unchecked(feature: Feature) -> Self {
         Self(feature)
+    }
+
+    /// See [`FeatureParameters::is_super_sampling_initialised`].
+    pub fn is_initialised(&self) -> bool {
+        self.0.get_parameters().is_super_sampling_initialised()
     }
 }
 

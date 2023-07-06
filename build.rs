@@ -19,6 +19,7 @@ const DLSS_LIBRARY_TYPE: DlssLibraryType = DlssLibraryType::Development;
 const DLSS_LIBRARY_FILE_NAME: &str = "nvidia-ngx-dlss";
 // const HEADER_FILE_PATH: &str = "DLSS/include/nvsdk_ngx_vk.h";
 const HEADER_FILE_PATH: &str = "src/bindings.h";
+const SOURCE_FILE_PATH: &str = "src/bindings.c";
 
 fn library_path() -> String {
     // let path = match DLSS_LIBRARY_TYPE {
@@ -35,13 +36,63 @@ fn library_path() -> String {
         .to_owned()
 }
 
+fn compile_helpers() {
+    // This is the directory where the `c` library is located.
+    let libdir_path = PathBuf::from("./")
+        // Canonicalize the path as `rustc-link-search` requires an absolute
+        // path.
+        .canonicalize()
+        .expect("cannot canonicalize path");
+    // This is the path to the intermediate object file for our library.
+    let obj_path = libdir_path.join("target/ngx_helpers.o");
+    // This is the path to the static library file.
+    let lib_path = libdir_path.join("target/libngx_helpers.a");
+
+    // Run `clang` to compile the source code file into an object file.
+    if !std::process::Command::new("clang")
+        .arg("-c")
+        .arg("-o")
+        .arg(&obj_path)
+        .arg(libdir_path.join(SOURCE_FILE_PATH))
+        .output()
+        .expect("could not spawn `clang`")
+        .status
+        .success()
+    {
+        // Panic if the command was not successful.
+        panic!("could not compile object file");
+    }
+
+    // Run `ar` to generate the static library.
+    if !std::process::Command::new("ar")
+        .arg("rcs")
+        .arg(lib_path)
+        .arg(obj_path)
+        .output()
+        .expect("could not spawn `ar`")
+        .status
+        .success()
+    {
+        // Panic if the command was not successful.
+        panic!("could not emit library file");
+    }
+
+    // Link against the built helpers wrapper.
+    println!(
+        "cargo:rustc-link-search={}",
+        libdir_path.join("target/").to_str().unwrap()
+    );
+    println!("cargo:rustc-link-lib=ngx_helpers");
+}
+
 fn main() {
+    compile_helpers();
+
     // Tell cargo to look for shared libraries in the specified directory
     println!("cargo:rustc-link-search={}", library_path());
 
     // Tell cargo to tell rustc to link the system bzip2
     // shared library.
-    // println!("cargo:rustc-link-lib={DLSS_LIBRARY_FILE_NAME}");
     println!("cargo:rustc-link-lib=nvsdk_ngx");
     println!("cargo:rustc-link-lib=stdc++");
     println!("cargo:rustc-link-lib=dl");
@@ -62,6 +113,7 @@ fn main() {
         .impl_debug(true)
         .impl_partialeq(true)
         .prepend_enum_name(false)
+        .generate_inline_functions(true)
         // .generate_cstr(true)
         // .bitfield_enum("NVSDK_NGX_DLSS_Feature_Flags")
         // .bitfield_enum("NVSDK_NGX_Result")

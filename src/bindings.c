@@ -1,10 +1,4 @@
-#ifndef BINDINGS_H
-#define BINDINGS_H
-
-#include <vulkan/vulkan.h>
-#include "../DLSS/include/nvsdk_ngx_vk.h"
-#include "../DLSS/include/nvsdk_ngx_helpers.h"
-#include "../DLSS/include/nvsdk_ngx_helpers_vk.h"
+#include "bindings.h"
 
 NVSDK_NGX_Resource_VK HELPERS_NVSDK_NGX_Create_ImageView_Resource_VK(
     VkImageView imageView,
@@ -13,7 +7,18 @@ NVSDK_NGX_Resource_VK HELPERS_NVSDK_NGX_Create_ImageView_Resource_VK(
     VkFormat format,
     unsigned int width,
     unsigned int height,
-    bool readWrite);
+    bool readWrite) {
+
+    return NVSDK_NGX_Create_ImageView_Resource_VK(
+        imageView,
+        image,
+        subresourceRange,
+        format,
+        width,
+        height,
+        readWrite
+    );
+}
 
 NVSDK_NGX_Result HELPERS_NGX_DLSS_GET_OPTIMAL_SETTINGS(
     NVSDK_NGX_Parameter *pInParams,
@@ -26,6 +31,19 @@ NVSDK_NGX_Result HELPERS_NGX_DLSS_GET_OPTIMAL_SETTINGS(
     unsigned int *pOutRenderMaxHeight,
     unsigned int *pOutRenderMinWidth,
     unsigned int *pOutRenderMinHeight,
-    float *pOutSharpness);
+    float *pOutSharpness) {
 
-#endif // BINDINGS_H
+    return NGX_DLSS_GET_OPTIMAL_SETTINGS(
+        pInParams,
+        InUserSelectedWidth,
+        InUserSelectedHeight,
+        InPerfQualityValue,
+        pOutRenderOptimalWidth,
+        pOutRenderOptimalHeight,
+        pOutRenderMaxWidth,
+        pOutRenderMaxHeight,
+        pOutRenderMinWidth,
+        pOutRenderMinHeight,
+        pOutSharpness
+    );
+}
