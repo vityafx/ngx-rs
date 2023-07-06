@@ -2,6 +2,8 @@
 
 #![deny(missing_docs)]
 
+use std::mem::ManuallyDrop;
+
 use crate::bindings;
 use crate::Result;
 use ash::vk::{self, Handle};
@@ -120,10 +122,10 @@ pub struct System {
 }
 
 /// Current [`ash::Entry`] with which the NGX was associated.
-static mut ASH_ENTRY: Option<ash::Entry> = None;
+static mut ASH_ENTRY: Option<ManuallyDrop<ash::Entry>> = None;
 
 /// Current [`ash::Instance`] with which the NGX was associated.
-static mut ASH_INSTANCE: Option<ash::Instance> = None;
+static mut ASH_INSTANCE: Option<ManuallyDrop<ash::Instance>> = None;
 
 unsafe extern "C" fn get_instance_proc_addr<T>(
     instance: *mut T,
@@ -132,11 +134,11 @@ unsafe extern "C" fn get_instance_proc_addr<T>(
     ASH_ENTRY
         .as_ref()
         .map(|e| {
-            e.get_instance_proc_addr(
-                vk::Instance::from_raw(instance.offset_from(std::ptr::null_mut()) as u64),
-                proc_name,
-            )
-            .map(|p| std::mem::transmute(p))
+            let instance = instance as *mut u8;
+            let address = instance.offset_from(std::ptr::null::<u8>());
+            let raw_handle = address as u64;
+            e.get_instance_proc_addr(vk::Instance::from_raw(raw_handle), proc_name)
+                .map(|p| std::mem::transmute(p))
         })
         .flatten()
 }
@@ -148,11 +150,11 @@ unsafe extern "C" fn get_device_proc_addr<T>(
     ASH_INSTANCE
         .as_ref()
         .map(|i| {
-            (i.fp_v1_0().get_device_proc_addr)(
-                vk::Device::from_raw(logical_device.offset_from(std::ptr::null_mut()) as u64),
-                proc_name,
-            )
-            .map(|p| std::mem::transmute(p))
+            let logical_device = logical_device as *mut u8;
+            let address = logical_device.offset_from(std::ptr::null::<u8>());
+            let raw_handle = address as u64;
+            (i.fp_v1_0().get_device_proc_addr)(vk::Device::from_raw(raw_handle), proc_name)
+                .map(|p| std::mem::transmute(p))
         })
         .flatten()
 }
@@ -169,8 +171,8 @@ impl System {
         logical_device: vk::Device,
     ) -> Result<Self> {
         unsafe {
-            ASH_ENTRY = Some(entry.clone());
-            ASH_INSTANCE = Some(instance.clone());
+            ASH_ENTRY = Some(ManuallyDrop::new(entry.clone()));
+            ASH_INSTANCE = Some(ManuallyDrop::new(instance.clone()));
         }
         let engine_type = bindings::NVSDK_NGX_EngineType::NVSDK_NGX_ENGINE_TYPE_CUSTOM;
         let project_id = std::ffi::CString::new(
