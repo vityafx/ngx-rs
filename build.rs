@@ -44,6 +44,7 @@ fn main() {
     // println!("cargo:rustc-link-lib={DLSS_LIBRARY_FILE_NAME}");
     println!("cargo:rustc-link-lib=nvsdk_ngx");
     println!("cargo:rustc-link-lib=stdc++");
+    println!("cargo:rustc-link-lib=dl");
 
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed={HEADER_FILE_PATH}");
@@ -61,6 +62,7 @@ fn main() {
         .impl_debug(true)
         .impl_partialeq(true)
         .prepend_enum_name(false)
+        // .generate_cstr(true)
         // .bitfield_enum("NVSDK_NGX_DLSS_Feature_Flags")
         // .bitfield_enum("NVSDK_NGX_Result")
         .disable_name_namespacing()

@@ -7,32 +7,7 @@ pub mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-pub mod ngx;
-pub use ngx::*;
-
-impl std::fmt::Display for bindings::NVSDK_NGX_Result {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let chars = unsafe { bindings::GetNGXResultAsString(*self as _) } as *const i32;
-        let length = unsafe { libc::wcslen(chars) };
-        let string = unsafe { widestring::WideCString::from_ptr(chars.cast(), length) }
-            .map_err(|_| std::fmt::Error)?;
-        let string = string.to_string().map_err(|_| std::fmt::Error)?;
-        f.write_str(&string)?;
-        // unsafe {
-        //     libc::free(chars as *mut _);
-        // }
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::bindings;
-
-    #[test]
-    fn test_error_message() {
-        let string =
-            bindings::NVSDK_NGX_Result::NVSDK_NGX_Result_FAIL_FeatureNotSupported.to_string();
-        assert_eq!(string, "NVSDK_NGX_Result_FAIL_FeatureNotSupported");
-    }
-}
+pub mod error;
+pub use error::*;
+pub mod vk;
+pub use vk::*;

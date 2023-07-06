@@ -1,7 +1,9 @@
 //! Vulkan NGX.
 
-use super::Result;
+#![deny(missing_docs)]
+
 use crate::bindings;
+use crate::Result;
 use ash::vk::{self, Handle};
 
 /// Returns a mutable pointer for [`ash::vk::Handle`].
@@ -10,6 +12,20 @@ fn ash_handle_to_pointer_mut<H: Handle + Copy, T>(ash_handle: &H) -> *mut T {
     let pointer = std::ptr::null_mut::<u8>();
     let pointer = unsafe { pointer.add(address as _) };
     pointer.cast()
+}
+
+fn convert_slice_of_strings_to_cstrings(data: &[String]) -> Result<Vec<std::ffi::CString>> {
+    let strings: Vec<_> = data
+        .iter()
+        .cloned()
+        .filter_map(|s| std::ffi::CString::new(s).ok())
+        .collect();
+
+    if strings.len() != data.len() {
+        return Err(format!("Couldn't convert the extensions to CStrings.").into());
+    }
+
+    Ok(strings)
 }
 
 /// Vulkan extensions required for the NVIDIA NGX operation.
@@ -21,6 +37,18 @@ pub struct RequiredExtensions {
     pub instance: Vec<String>,
 }
 impl RequiredExtensions {
+    /// Returns a list of device extensions as a list of
+    /// [`std::ffi::CString`].
+    pub fn get_device_extensions_c_strings(&self) -> Result<Vec<std::ffi::CString>> {
+        convert_slice_of_strings_to_cstrings(&self.device)
+    }
+
+    /// Returns a list of instance extensions as a list of
+    /// [`std::ffi::CString`].
+    pub fn get_instance_extensions_c_strings(&self) -> Result<Vec<std::ffi::CString>> {
+        convert_slice_of_strings_to_cstrings(&self.instance)
+    }
+
     /// Returns a list of required vulkan extensions for NGX to work.
     pub fn get() -> Result<Self> {
         let mut instance_extensions: *mut *const std::ffi::c_char = std::ptr::null_mut();
@@ -91,16 +119,59 @@ pub struct System {
     device: vk::Device,
 }
 
+/// Current [`ash::Entry`] with which the NGX was associated.
+static mut ASH_ENTRY: Option<ash::Entry> = None;
+
+/// Current [`ash::Instance`] with which the NGX was associated.
+static mut ASH_INSTANCE: Option<ash::Instance> = None;
+
+unsafe extern "C" fn get_instance_proc_addr<T>(
+    instance: *mut T,
+    proc_name: *const i8,
+) -> Option<unsafe extern "C" fn()> {
+    ASH_ENTRY
+        .as_ref()
+        .map(|e| {
+            e.get_instance_proc_addr(
+                vk::Instance::from_raw(instance.offset_from(std::ptr::null_mut()) as u64),
+                proc_name,
+            )
+            .map(|p| std::mem::transmute(p))
+        })
+        .flatten()
+}
+
+unsafe extern "C" fn get_device_proc_addr<T>(
+    logical_device: *mut T,
+    proc_name: *const i8,
+) -> Option<unsafe extern "C" fn()> {
+    ASH_INSTANCE
+        .as_ref()
+        .map(|i| {
+            (i.fp_v1_0().get_device_proc_addr)(
+                vk::Device::from_raw(logical_device.offset_from(std::ptr::null_mut()) as u64),
+                proc_name,
+            )
+            .map(|p| std::mem::transmute(p))
+        })
+        .flatten()
+}
+
 impl System {
     /// Creates a new NVIDIA NGX system.
     pub fn new(
         project_id: Option<uuid::Uuid>,
         engine_version: &str,
         application_data_path: &std::path::Path,
-        instance: vk::Instance,
+        entry: &ash::Entry,
+        instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         logical_device: vk::Device,
     ) -> Result<Self> {
+        unsafe {
+            ASH_ENTRY = Some(entry.clone());
+            ASH_INSTANCE = Some(instance.clone());
+        }
         let engine_type = bindings::NVSDK_NGX_EngineType::NVSDK_NGX_ENGINE_TYPE_CUSTOM;
         let project_id = std::ffi::CString::new(
             project_id
@@ -117,11 +188,11 @@ impl System {
                 engine_type,
                 engine_version.as_ptr(),
                 application_data_path.as_ptr().cast(),
-                instance.to_pointer_mut(),
+                instance.handle().to_pointer_mut(),
                 physical_device.to_pointer_mut(),
                 logical_device.to_pointer_mut(),
-                None,
-                None,
+                Some(get_instance_proc_addr),
+                Some(get_device_proc_addr),
                 std::ptr::null(),
                 bindings::NVSDK_NGX_Version::NVSDK_NGX_Version_API,
             )
@@ -168,6 +239,7 @@ impl Drop for FeatureHandle {
 
 /// A type alias for feature parameter, like
 /// [`bindings::NVSDK_NGX_Parameter_NumFrames`].
+// pub type FeatureParameterName = std::ffi::CStr;
 pub type FeatureParameterName = [u8];
 
 /// Feature parameters is a collection of parameters of a feature (ha!).
