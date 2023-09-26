@@ -3,8 +3,14 @@
 #![deny(missing_docs)]
 
 use std::mem::ManuallyDrop;
+use std::rc::Rc;
 
-use crate::bindings;
+use crate::bindings::{
+    self, NVSDK_NGX_BufferInfo_VK, NVSDK_NGX_DLSS_Create_Params, NVSDK_NGX_DLSS_Feature_Flags,
+    NVSDK_NGX_Dimensions, NVSDK_NGX_PerfQuality_Value, NVSDK_NGX_Resource_VK_Type,
+    NVSDK_NGX_Resource_VK__bindgen_ty_1, NVSDK_NGX_VK_DLSS_Eval_Params, VkImageSubresourceRange,
+};
+use crate::bindings::{NVSDK_NGX_Coordinates, NVSDK_NGX_Resource_VK};
 use crate::Result;
 use ash::vk::{self, Handle};
 
@@ -259,12 +265,18 @@ impl Drop for System {
 #[derive(Debug)]
 struct FeatureHandle(*mut bindings::NVSDK_NGX_Handle);
 
+impl Default for FeatureHandle {
+    fn default() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
 impl FeatureHandle {
-    fn new(raw_handle: *mut bindings::NVSDK_NGX_Handle) -> Self {
-        Self(raw_handle)
+    fn new() -> Self {
+        Self::default()
     }
 
-    fn release(&self) -> Result {
+    fn release(&mut self) -> Result {
         unsafe { bindings::NVSDK_NGX_VULKAN_ReleaseFeature(self.0) }.into()
     }
 }
@@ -653,9 +665,9 @@ impl Drop for FeatureParameters {
 /// Describes a single NGX feature.
 #[derive(Debug)]
 pub struct Feature {
-    handle: FeatureHandle,
+    handle: Rc<FeatureHandle>,
     feature_type: bindings::NVSDK_NGX_Feature,
-    parameters: FeatureParameters,
+    parameters: Rc<FeatureParameters>,
 }
 
 impl Feature {
@@ -666,7 +678,7 @@ impl Feature {
         feature_type: bindings::NVSDK_NGX_Feature,
         parameters: FeatureParameters,
     ) -> Result<Self> {
-        let mut handle = FeatureHandle::new(std::ptr::null_mut());
+        let mut handle = FeatureHandle::new();
         Result::from(unsafe {
             bindings::NVSDK_NGX_VULKAN_CreateFeature1(
                 device.to_pointer_mut(),
@@ -677,9 +689,9 @@ impl Feature {
             )
         })
         .map(|_| Self {
-            handle,
+            handle: handle.into(),
             feature_type,
-            parameters,
+            parameters: parameters.into(),
         })
     }
 
@@ -692,23 +704,21 @@ impl Feature {
     ) -> Result<SuperSamplingFeature> {
         let feature_type = bindings::NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling;
         unsafe {
-            let mut handle = FeatureHandle::new(std::ptr::null_mut());
-            Result::from(unsafe {
-                bindings::HELPERS_NGX_VULKAN_CREATE_DLSS_EXT1(
-                    device.to_pointer_mut(),
-                    command_buffer.to_pointer_mut(),
-                    1,
-                    1,
-                    &mut handle.0 as *mut _,
-                    parameters.0,
-                    &mut super_sampling_create_parameters.0 as *mut _,
-                )
-            })
+            let mut handle = FeatureHandle::new();
+            Result::from(bindings::HELPERS_NGX_VULKAN_CREATE_DLSS_EXT1(
+                device.to_pointer_mut(),
+                command_buffer.to_pointer_mut(),
+                1,
+                1,
+                &mut handle.0 as *mut _,
+                parameters.0,
+                &mut super_sampling_create_parameters.0 as *mut _,
+            ))
             .map(|_| {
                 SuperSamplingFeature::from_feature_unchecked(Self {
-                    handle,
+                    handle: handle.into(),
                     feature_type,
-                    parameters,
+                    parameters: parameters.into(),
                 })
             })
         }
@@ -717,6 +727,11 @@ impl Feature {
     /// Returns the parameters associated with this feature.
     pub fn get_parameters(&self) -> &FeatureParameters {
         &self.parameters
+    }
+
+    /// Returns the parameters associated with this feature.
+    pub fn get_parameters_mut(&mut self) -> &mut FeatureParameters {
+        Rc::get_mut(&mut self.parameters).unwrap()
     }
 
     /// Returns the type of this feature.
@@ -763,11 +778,15 @@ impl Feature {
                 command_buffer.to_pointer_mut(),
                 self.handle.0,
                 self.parameters.0,
-                None,
+                Some(feature_progress_callback),
             )
         }
         .into()
     }
+}
+
+unsafe extern "C" fn feature_progress_callback(progress: f32, _should_cancel: *mut bool) {
+    log::debug!("Feature evalution progress={progress}.");
 }
 
 /// Describes a set of NGX feature requirements.
@@ -867,10 +886,10 @@ impl SuperSamplingCreateParameters {
         render_height: u32,
         target_width: u32,
         target_height: u32,
-        quality_value: Option<bindings::NVSDK_NGX_PerfQuality_Value>,
-        flags: Option<bindings::NVSDK_NGX_DLSS_Feature_Flags>,
+        quality_value: Option<NVSDK_NGX_PerfQuality_Value>,
+        flags: Option<NVSDK_NGX_DLSS_Feature_Flags>,
     ) -> Self {
-        let mut params: bindings::NVSDK_NGX_DLSS_Create_Params = unsafe { std::mem::zeroed() };
+        let mut params: NVSDK_NGX_DLSS_Create_Params = unsafe { std::mem::zeroed() };
         params.Feature.InWidth = render_width;
         params.Feature.InHeight = render_height;
         params.Feature.InTargetWidth = target_width;
@@ -878,7 +897,7 @@ impl SuperSamplingCreateParameters {
         if let Some(quality_value) = quality_value {
             params.Feature.InPerfQualityValue = quality_value;
         }
-        params.InFeatureCreateFlags = flags.map(|f| f as i32).unwrap_or(0);
+        params.InFeatureCreateFlags = flags.map(|f| f.0).unwrap_or(0);
         Self(params)
     }
 }
@@ -891,55 +910,281 @@ impl From<SuperSamplingOptimalSettings> for SuperSamplingCreateParameters {
             value.target_width,
             value.target_height,
             Some(value.desired_quality_level),
-            None,
+            Some(
+                NVSDK_NGX_DLSS_Feature_Flags::NVSDK_NGX_DLSS_Feature_Flags_AutoExposure
+                    | NVSDK_NGX_DLSS_Feature_Flags::NVSDK_NGX_DLSS_Feature_Flags_MVLowRes,
+            ),
         )
     }
 }
 
-/// Only mandatory parameters for the SuperSampling feature evaluation.
-#[derive(Debug, derive_builder::Builder)]
-pub struct SuperSamplingEvaluationParametersSimple {
-    /// The feature evaluation parameters, specific to Vulkan.
-    feature_evaluation_parameters: bindings::NVSDK_NGX_VK_Feature_Eval_Params,
-    /// The depth information.
-    depth: bindings::NVSDK_NGX_Resource_VK,
-    /// The motion vectors.
-    motion_vectors: bindings::NVSDK_NGX_Resource_VK,
-    /// Jitter offset x.
-    jitter_offset_x: f32,
-    /// Jitter offset y.
-    jitter_offset_y: f32,
-    /// The dimensions of the viewport.
-    dimensions: bindings::NVSDK_NGX_Dimensions,
-}
+// /// Only mandatory parameters for the SuperSampling feature evaluation.
+// #[derive(Debug, derive_builder::Builder)]
+// pub struct SuperSamplingEvaluationParametersSimple {
+//     /// The feature evaluation parameters, specific to Vulkan.
+//     feature_evaluation_parameters: bindings::NVSDK_NGX_VK_Feature_Eval_Params,
+//     /// The depth information.
+//     depth: bindings::NVSDK_NGX_Resource_VK,
+//     /// The motion vectors.
+//     motion_vectors: bindings::NVSDK_NGX_Resource_VK,
+//     /// Jitter offset x.
+//     jitter_offset_x: f32,
+//     /// Jitter offset y.
+//     jitter_offset_y: f32,
+//     /// The dimensions of the viewport.
+//     dimensions: bindings::NVSDK_NGX_Dimensions,
+// }
 
 // impl From<SuperSamplingEvaluationParametersSimple> for SuperSamplingEvaluationParameters {
 //     fn from(value: SuperSamplingEvaluationParametersSimple) -> Self {
 //         let mut params: bindings::NVSDK_NGX_VK_DLSS_Eval_Params = unsafe { std::mem::zeroed() };
 //         params.Feature = value.feature_evaluation_parameters;
 //         params.pInDepth = value.depth;
+//         unsafe {
+//             bindings::HELPERS_NVSDK_NGX_Create_ImageView_Resource_VK(imageView, image, subresourceRange, format, width, height, readWrite)
+//         }
 //         Self(params)
 //     }
 // }
 
-/// The SuperSampling evaluation parameters.
-#[repr(transparent)]
-#[derive(Debug)]
-pub struct SuperSamplingEvaluationParameters(bindings::NVSDK_NGX_VK_DLSS_Eval_Params);
+/// A mode that a vulkan resource might have.
+#[derive(Default, Debug, Copy, Clone)]
+pub enum VkResourceMode {
+    /// Indicates that the resource can only be read.
+    #[default]
+    Readable,
+    /// Indicates that the resource can be written to.
+    Writable,
+}
 
-// impl SuperSamplingEvaluationParameters {
-//     /// Returns a builder to build the parameters.
-//     pub fn builder() -> SuperSamplingEvaluationParametersSimple {
-//         SuperSamplingEvaluationParametersSimpleBuilder::default()
+/// A struct, objects of which should be hold by
+/// [`SuperSamplingEvaluationParameters`] for feature evaluation.
+#[derive(Debug, Default, Copy, Clone)]
+pub struct VkBufferResourceDescription {
+    /// The buffer!
+    pub buffer: vk::Buffer,
+    /// The size of the buffer in bytes.
+    pub size_in_bytes: usize,
+    /// The mode this resource has.
+    pub mode: VkResourceMode,
+}
+
+/// A struct, objects of which should be hold by
+/// [`SuperSamplingEvaluationParameters`] for feature evaluation.
+#[derive(Debug, Default, Copy, Clone)]
+pub struct VkImageResourceDescription {
+    /// The image view.
+    pub image_view: vk::ImageView,
+    /// The image.
+    pub image: vk::Image,
+    /// The subresource range.
+    pub subresource_range: vk::ImageSubresourceRange,
+    /// The format.
+    pub format: vk::Format,
+    /// The width of the image.
+    pub width: u32,
+    /// The height of the image.
+    pub height: u32,
+    /// The mode this resource has.
+    pub mode: VkResourceMode,
+}
+
+// impl From<VkImageResourceDescription> for bindings::NVSDK_NGX_Resource_VK {
+//     fn from(value: VkImageResourceDescription) -> Self {
+//         let mut image_resource = bindings::NVSDK_NGX_Resource_VK__bindgen_ty_1 {
+//             ImageViewInfo: bindings:: NVSDK_NGX_ImageViewInfo_VK {
+//                 ImageView: &mut
+//             }
+//         };
+//         Self {
+//             Resource:
+//         }
 //     }
 // }
 
-/// A SuperSamling (or "DLSS") feature.
-#[repr(transparent)]
+/// The SuperSampling evaluation parameters.
 #[derive(Debug)]
-pub struct SuperSamplingFeature(Feature);
+pub struct SuperSamplingEvaluationParameters {
+    /// The vulkan resource which is an input to the evaluation
+    /// parameters (for the upscaling).
+    color_input: VkImageResourceDescription,
+    /// The vulkan resource which is the output of the evaluation,
+    /// so the upscaled image.
+    color_output: VkImageResourceDescription,
+    color_resource: NVSDK_NGX_Resource_VK,
+    /// The depth buffer.
+    depth: VkBufferResourceDescription,
+    /// The motion vectors.
+    motion_vectors: VkBufferResourceDescription,
+    motion_vectors_resource: NVSDK_NGX_Resource_VK,
+
+    /// This member isn't visible, as it shouldn't be managed by
+    /// the user of this struct. Instead, this struct provides an
+    /// interface that populates this object and keeps it well-
+    /// maintained.
+    parameters: NVSDK_NGX_VK_DLSS_Eval_Params,
+}
+
+impl Default for SuperSamplingEvaluationParameters {
+    fn default() -> Self {
+        unsafe { std::mem::zeroed() }
+    }
+}
+
+impl SuperSamplingEvaluationParameters {
+    /// Creates a new set of evaluation parameters for SuperSampling.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the color input parameter.
+    pub fn set_color_input(&mut self, color_input: VkImageResourceDescription) {
+        self.color_input = color_input;
+
+        let vk_image_subresource_range = VkImageSubresourceRange {
+            aspectMask: self.color_input.subresource_range.aspect_mask.as_raw(),
+            baseMipLevel: self.color_input.subresource_range.base_mip_level,
+            baseArrayLayer: self.color_input.subresource_range.base_array_layer,
+            levelCount: self.color_input.subresource_range.level_count,
+            layerCount: self.color_input.subresource_range.layer_count,
+        };
+        let mut vk_format: bindings::VkFormat = unsafe { std::mem::zeroed() };
+        unsafe {
+            let ptr = &mut vk_format as *mut _ as *mut i32;
+            *ptr = self.color_input.format.as_raw();
+        }
+        let image_resource = NVSDK_NGX_Resource_VK__bindgen_ty_1 {
+            ImageViewInfo: bindings::NVSDK_NGX_ImageViewInfo_VK {
+                ImageView: unsafe { self.color_input.image_view.to_pointer_mut() },
+                Image: unsafe { self.color_input.image.to_pointer_mut() },
+                SubresourceRange: vk_image_subresource_range,
+                Format: vk_format,
+                Width: self.color_input.width,
+                Height: self.color_input.height,
+            },
+        };
+        self.color_resource = NVSDK_NGX_Resource_VK {
+            Resource: image_resource,
+            Type: NVSDK_NGX_Resource_VK_Type::NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW,
+            ReadWrite: matches!(self.color_input.mode, VkResourceMode::Writable),
+        };
+        self.parameters.Feature.pInColor = std::ptr::addr_of_mut!(self.color_resource);
+        // TODO: check if this hack actually works.
+        self.parameters.Feature.pInOutput = std::ptr::addr_of_mut!(self.color_resource);
+    }
+
+    /// Sets the motion vectors.
+    /// In case the `scale` argument is omitted, the `1.0f32` scaling is
+    /// used.
+    pub fn set_motions_vectors(
+        &mut self,
+        buffer: VkBufferResourceDescription,
+        scale: Option<[f32; 2]>,
+    ) {
+        const DEFAULT_SCALING: [f32; 2] = [1.0f32, 1.0f32];
+
+        self.motion_vectors = buffer;
+        let motion_vectors_resource = NVSDK_NGX_Resource_VK__bindgen_ty_1 {
+            BufferInfo: NVSDK_NGX_BufferInfo_VK {
+                Buffer: unsafe { self.motion_vectors.buffer.to_pointer_mut() },
+                SizeInBytes: u32::try_from(self.motion_vectors.size_in_bytes).unwrap(),
+            },
+        };
+        self.motion_vectors_resource = NVSDK_NGX_Resource_VK {
+            Resource: motion_vectors_resource,
+            Type: bindings::NVSDK_NGX_Resource_VK_Type::NVSDK_NGX_RESOURCE_VK_TYPE_VK_BUFFER,
+            ReadWrite: matches!(self.motion_vectors.mode, VkResourceMode::Writable),
+        };
+        let scales = scale.unwrap_or(DEFAULT_SCALING);
+        self.parameters.pInMotionVectors = std::ptr::addr_of_mut!(self.motion_vectors_resource);
+        self.parameters.InMVScaleX = scales[0];
+        self.parameters.InMVScaleY = scales[1];
+    }
+
+    /// Sets the jitter offsets (like TAA).
+    pub fn set_jitter_offsets(&mut self, x: f32, y: f32) {
+        self.parameters.InJitterOffsetX = x;
+        self.parameters.InJitterOffsetY = y;
+    }
+
+    /// Sets/unsets the reset flag.
+    pub fn set_reset(&mut self, should_reset: bool) {
+        self.parameters.InReset = if should_reset { 1 } else { 0 };
+    }
+
+    /// Sets the rendering dimensions.
+    pub fn set_rendering_dimensions(
+        &mut self,
+        rendering_offset: [u32; 2],
+        rendering_size: [u32; 2],
+    ) {
+        self.parameters.InColorSubrectBase = NVSDK_NGX_Coordinates {
+            X: rendering_offset[0],
+            Y: rendering_offset[1],
+        };
+        self.parameters.InDepthSubrectBase = NVSDK_NGX_Coordinates {
+            X: rendering_offset[0],
+            Y: rendering_offset[1],
+        };
+        self.parameters.InTranslucencySubrectBase = NVSDK_NGX_Coordinates {
+            X: rendering_offset[0],
+            Y: rendering_offset[1],
+        };
+        self.parameters.InMVSubrectBase = NVSDK_NGX_Coordinates {
+            X: rendering_offset[0],
+            Y: rendering_offset[1],
+        };
+        self.parameters.InRenderSubrectDimensions = NVSDK_NGX_Dimensions {
+            Width: rendering_size[0],
+            Height: rendering_size[1],
+        };
+    }
+
+    /// Returns the filled DLSS parameters.
+    pub(crate) fn get_dlss_evaluation_parameters(
+        &mut self,
+    ) -> *mut bindings::NVSDK_NGX_VK_DLSS_Eval_Params {
+        std::ptr::addr_of_mut!(self.parameters)
+    }
+
+    // /// Returns an immutable reference to the color output.
+    // pub fn get_color_output(&self) -> &VkImageResourceDescription {
+    //     &self.color_output
+    // }
+
+    // /// Returns a mutable reference to the color output.
+    // pub fn get_color_output_mut(&mut self) -> &mut VkImageResourceDescription {
+    //     &mut self.color_output
+    // }
+
+    // /// Returns an immutable reference to the depth.
+    // pub fn get_color(&self) -> &VkBufferResourceDescription {
+    //     &self.depth
+    // }
+
+    // /// Returns a mutable reference to the depth.
+    // pub fn get_color_mut(&mut self) -> &mut VkBufferResourceDescription {
+    //     &mut self.depth
+    // }
+}
+
+/// A SuperSamling (or "DLSS") feature.
+#[derive(Debug)]
+pub struct SuperSamplingFeature {
+    feature: Feature,
+    parameters: SuperSamplingEvaluationParameters,
+}
 
 impl SuperSamplingFeature {
+    /// Returns the inner feature object.
+    pub fn get_inner(&self) -> &Feature {
+        &self.feature
+    }
+
+    /// Returns the inner feature object (mutable).
+    pub fn get_inner_mut(&mut self) -> &mut Feature {
+        &mut self.feature
+    }
     // /// Attempts to create the [`SuperSamplingFeature`] with the default
     // /// settings preset.
     // pub fn try_default() -> Result<Self> {
@@ -961,29 +1206,34 @@ impl SuperSamplingFeature {
     ///
     /// For the safe and checked version use [`std::convert::TryFrom`].
     pub unsafe fn from_feature_unchecked(feature: Feature) -> Self {
-        Self(feature)
+        Self {
+            feature,
+            parameters: SuperSamplingEvaluationParameters::default(),
+        }
     }
 
     /// See [`FeatureParameters::is_super_sampling_initialised`].
     pub fn is_initialised(&self) -> bool {
-        self.0.get_parameters().is_super_sampling_initialised()
+        self.feature
+            .get_parameters()
+            .is_super_sampling_initialised()
+    }
+
+    /// Returns the evaluation parameters.
+    pub fn get_evaluation_parameters_mut(&mut self) -> &mut SuperSamplingEvaluationParameters {
+        &mut self.parameters
     }
 
     /// Evaluates the feature.
-    pub fn evaluate(
-        &self,
-        command_buffer: vk::CommandBuffer,
-        parameters: SuperSamplingEvaluationParameters,
-    ) -> Result {
-        unimplemented!()
-        // Result::from(unsafe {
-        //     bindings::HELPERS_NGX_VULKAN_EVALUATE_DLSS_EXT(
-        //         command_buffer.as_raw(),
-        //         self.0.handle.0,
-        //         self.0.parameters.0,
-        //         parameters.0,
-        //     )
-        // })
+    pub fn evaluate(&mut self, command_buffer: vk::CommandBuffer) -> Result {
+        Result::from(unsafe {
+            bindings::HELPERS_NGX_VULKAN_EVALUATE_DLSS_EXT(
+                command_buffer.to_pointer_mut(),
+                self.feature.handle.0,
+                self.feature.parameters.0,
+                self.parameters.get_dlss_evaluation_parameters(),
+            )
+        })
     }
 }
 

@@ -114,6 +114,7 @@ fn main() {
         .impl_partialeq(true)
         .prepend_enum_name(false)
         .generate_inline_functions(true)
+        .bitfield_enum("NVSDK_NGX_DLSS_Feature_Flags")
         // .generate_cstr(true)
         // .bitfield_enum("NVSDK_NGX_DLSS_Feature_Flags")
         // .bitfield_enum("NVSDK_NGX_Result")

@@ -19,7 +19,9 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&match self {
-            Self::Internal(e) => format!("Internal error: {e}"),
+            Self::Internal(code) => {
+                format!("Internal error: code={code}")
+            }
             Self::Other(s) => format!("Other error: {s}"),
         })
     }
@@ -47,7 +49,7 @@ impl From<bindings::NVSDK_NGX_Result> for Result {
     fn from(value: bindings::NVSDK_NGX_Result) -> Self {
         match value {
             bindings::NVSDK_NGX_Result::NVSDK_NGX_Result_Success => Ok(()),
-            e => Err(Error::Internal(e)),
+            code => Err(Error::Internal(code)),
         }
     }
 }
