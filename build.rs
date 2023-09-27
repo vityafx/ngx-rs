@@ -50,6 +50,8 @@ fn compile_helpers() {
 
     // Run `clang` to compile the source code file into an object file.
     if !std::process::Command::new("clang")
+        .arg("-g")
+        .arg("-G0")
         .arg("-c")
         .arg("-o")
         .arg(&obj_path)

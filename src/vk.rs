@@ -6,9 +6,10 @@ use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
 use crate::bindings::{
-    self, NVSDK_NGX_BufferInfo_VK, NVSDK_NGX_DLSS_Create_Params, NVSDK_NGX_DLSS_Feature_Flags,
-    NVSDK_NGX_Dimensions, NVSDK_NGX_PerfQuality_Value, NVSDK_NGX_Resource_VK_Type,
-    NVSDK_NGX_Resource_VK__bindgen_ty_1, NVSDK_NGX_VK_DLSS_Eval_Params, VkImageSubresourceRange,
+    self, NVSDK_NGX_DLSS_Create_Params, NVSDK_NGX_DLSS_Feature_Flags, NVSDK_NGX_Dimensions,
+    NVSDK_NGX_Feature, NVSDK_NGX_ImageViewInfo_VK, NVSDK_NGX_PerfQuality_Value,
+    NVSDK_NGX_Resource_VK_Type, NVSDK_NGX_Resource_VK__bindgen_ty_1, NVSDK_NGX_VK_DLSS_Eval_Params,
+    VkFormat, VkImageSubresourceRange,
 };
 use crate::bindings::{NVSDK_NGX_Coordinates, NVSDK_NGX_Resource_VK};
 use crate::Result;
@@ -703,6 +704,14 @@ impl Feature {
         mut super_sampling_create_parameters: SuperSamplingCreateParameters,
     ) -> Result<SuperSamplingFeature> {
         let feature_type = bindings::NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling;
+        let rendering_resolution = vk::Extent2D::builder()
+            .width(super_sampling_create_parameters.0.Feature.InWidth)
+            .height(super_sampling_create_parameters.0.Feature.InHeight)
+            .build();
+        let target_resolution = vk::Extent2D::builder()
+            .width(super_sampling_create_parameters.0.Feature.InTargetWidth)
+            .height(super_sampling_create_parameters.0.Feature.InTargetHeight)
+            .build();
         unsafe {
             let mut handle = FeatureHandle::new();
             Result::from(bindings::HELPERS_NGX_VULKAN_CREATE_DLSS_EXT1(
@@ -714,12 +723,16 @@ impl Feature {
                 parameters.0,
                 &mut super_sampling_create_parameters.0 as *mut _,
             ))
-            .map(|_| {
-                SuperSamplingFeature::from_feature_unchecked(Self {
-                    handle: handle.into(),
-                    feature_type,
-                    parameters: parameters.into(),
-                })
+            .and_then(|_| {
+                SuperSamplingFeature::new(
+                    Self {
+                        handle: handle.into(),
+                        feature_type,
+                        parameters: parameters.into(),
+                    },
+                    rendering_resolution,
+                    target_resolution,
+                )
             })
         }
     }
@@ -735,8 +748,13 @@ impl Feature {
     }
 
     /// Returns the type of this feature.
-    pub fn get_feature_type(&self) -> bindings::NVSDK_NGX_Feature {
+    pub fn get_feature_type(&self) -> NVSDK_NGX_Feature {
         self.feature_type
+    }
+
+    /// Returns [`true`] if this feature is the super sampling one.
+    pub fn is_super_sampling(&self) -> bool {
+        self.feature_type == NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling
     }
 
     /// Returns the number of bytes needed for the scratch buffer for
@@ -989,33 +1007,58 @@ pub struct VkImageResourceDescription {
     pub mode: VkResourceMode,
 }
 
-// impl From<VkImageResourceDescription> for bindings::NVSDK_NGX_Resource_VK {
-//     fn from(value: VkImageResourceDescription) -> Self {
-//         let mut image_resource = bindings::NVSDK_NGX_Resource_VK__bindgen_ty_1 {
-//             ImageViewInfo: bindings:: NVSDK_NGX_ImageViewInfo_VK {
-//                 ImageView: &mut
-//             }
-//         };
-//         Self {
-//             Resource:
-//         }
-//     }
-// }
+impl VkImageResourceDescription {
+    /// Sets the writable bit.
+    pub fn set_writable(&mut self) {
+        self.mode = VkResourceMode::Writable;
+    }
+}
+
+impl From<VkImageResourceDescription> for NVSDK_NGX_Resource_VK {
+    fn from(value: VkImageResourceDescription) -> Self {
+        let vk_image_subresource_range = VkImageSubresourceRange {
+            aspectMask: value.subresource_range.aspect_mask.as_raw(),
+            baseMipLevel: value.subresource_range.base_mip_level,
+            baseArrayLayer: value.subresource_range.base_array_layer,
+            levelCount: value.subresource_range.level_count,
+            layerCount: value.subresource_range.layer_count,
+        };
+        let mut vk_format: VkFormat = unsafe { std::mem::zeroed() };
+        unsafe {
+            let ptr = &mut vk_format as *mut _ as *mut i32;
+            *ptr = value.format.as_raw();
+        }
+        let image_resource = NVSDK_NGX_Resource_VK__bindgen_ty_1 {
+            ImageViewInfo: NVSDK_NGX_ImageViewInfo_VK {
+                ImageView: unsafe { value.image_view.to_pointer_mut() },
+                Image: unsafe { value.image.to_pointer_mut() },
+                SubresourceRange: vk_image_subresource_range,
+                Format: vk_format,
+                Width: value.width,
+                Height: value.height,
+            },
+        };
+
+        Self {
+            Resource: image_resource,
+            Type: NVSDK_NGX_Resource_VK_Type::NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW,
+            ReadWrite: matches!(value.mode, VkResourceMode::Writable),
+        }
+    }
+}
 
 /// The SuperSampling evaluation parameters.
 #[derive(Debug)]
 pub struct SuperSamplingEvaluationParameters {
     /// The vulkan resource which is an input to the evaluation
     /// parameters (for the upscaling).
-    color_input: VkImageResourceDescription,
+    input_color_resource: NVSDK_NGX_Resource_VK,
     /// The vulkan resource which is the output of the evaluation,
     /// so the upscaled image.
-    color_output: VkImageResourceDescription,
-    color_resource: NVSDK_NGX_Resource_VK,
+    output_color_resource: NVSDK_NGX_Resource_VK,
     /// The depth buffer.
-    depth: VkBufferResourceDescription,
+    depth_resource: NVSDK_NGX_Resource_VK,
     /// The motion vectors.
-    motion_vectors: VkBufferResourceDescription,
     motion_vectors_resource: NVSDK_NGX_Resource_VK,
 
     /// This member isn't visible, as it shouldn't be managed by
@@ -1037,40 +1080,16 @@ impl SuperSamplingEvaluationParameters {
         Self::default()
     }
 
-    /// Sets the color input parameter.
-    pub fn set_color_input(&mut self, color_input: VkImageResourceDescription) {
-        self.color_input = color_input;
+    /// Sets the color input parameter (the image to upscale).
+    pub fn set_color_input(&mut self, description: VkImageResourceDescription) {
+        self.input_color_resource = description.into();
+        self.parameters.Feature.pInColor = std::ptr::addr_of_mut!(self.input_color_resource);
+    }
 
-        let vk_image_subresource_range = VkImageSubresourceRange {
-            aspectMask: self.color_input.subresource_range.aspect_mask.as_raw(),
-            baseMipLevel: self.color_input.subresource_range.base_mip_level,
-            baseArrayLayer: self.color_input.subresource_range.base_array_layer,
-            levelCount: self.color_input.subresource_range.level_count,
-            layerCount: self.color_input.subresource_range.layer_count,
-        };
-        let mut vk_format: bindings::VkFormat = unsafe { std::mem::zeroed() };
-        unsafe {
-            let ptr = &mut vk_format as *mut _ as *mut i32;
-            *ptr = self.color_input.format.as_raw();
-        }
-        let image_resource = NVSDK_NGX_Resource_VK__bindgen_ty_1 {
-            ImageViewInfo: bindings::NVSDK_NGX_ImageViewInfo_VK {
-                ImageView: unsafe { self.color_input.image_view.to_pointer_mut() },
-                Image: unsafe { self.color_input.image.to_pointer_mut() },
-                SubresourceRange: vk_image_subresource_range,
-                Format: vk_format,
-                Width: self.color_input.width,
-                Height: self.color_input.height,
-            },
-        };
-        self.color_resource = NVSDK_NGX_Resource_VK {
-            Resource: image_resource,
-            Type: NVSDK_NGX_Resource_VK_Type::NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW,
-            ReadWrite: matches!(self.color_input.mode, VkResourceMode::Writable),
-        };
-        self.parameters.Feature.pInColor = std::ptr::addr_of_mut!(self.color_resource);
-        // TODO: check if this hack actually works.
-        self.parameters.Feature.pInOutput = std::ptr::addr_of_mut!(self.color_resource);
+    /// Sets the color output (the upscaled image) information.
+    pub fn set_color_output(&mut self, description: VkImageResourceDescription) {
+        self.output_color_resource = description.into();
+        self.parameters.Feature.pInOutput = std::ptr::addr_of_mut!(self.output_color_resource);
     }
 
     /// Sets the motion vectors.
@@ -1078,27 +1097,22 @@ impl SuperSamplingEvaluationParameters {
     /// used.
     pub fn set_motions_vectors(
         &mut self,
-        buffer: VkBufferResourceDescription,
+        description: VkImageResourceDescription,
         scale: Option<[f32; 2]>,
     ) {
         const DEFAULT_SCALING: [f32; 2] = [1.0f32, 1.0f32];
 
-        self.motion_vectors = buffer;
-        let motion_vectors_resource = NVSDK_NGX_Resource_VK__bindgen_ty_1 {
-            BufferInfo: NVSDK_NGX_BufferInfo_VK {
-                Buffer: unsafe { self.motion_vectors.buffer.to_pointer_mut() },
-                SizeInBytes: u32::try_from(self.motion_vectors.size_in_bytes).unwrap(),
-            },
-        };
-        self.motion_vectors_resource = NVSDK_NGX_Resource_VK {
-            Resource: motion_vectors_resource,
-            Type: bindings::NVSDK_NGX_Resource_VK_Type::NVSDK_NGX_RESOURCE_VK_TYPE_VK_BUFFER,
-            ReadWrite: matches!(self.motion_vectors.mode, VkResourceMode::Writable),
-        };
+        self.motion_vectors_resource = description.into();
         let scales = scale.unwrap_or(DEFAULT_SCALING);
         self.parameters.pInMotionVectors = std::ptr::addr_of_mut!(self.motion_vectors_resource);
         self.parameters.InMVScaleX = scales[0];
         self.parameters.InMVScaleY = scales[1];
+    }
+
+    /// Sets the depth buffer.
+    pub fn set_depth_buffer(&mut self, description: VkImageResourceDescription) {
+        self.depth_resource = description.into();
+        self.parameters.pInDepth = std::ptr::addr_of_mut!(self.depth_resource);
     }
 
     /// Sets the jitter offsets (like TAA).
@@ -1173,9 +1187,31 @@ impl SuperSamplingEvaluationParameters {
 pub struct SuperSamplingFeature {
     feature: Feature,
     parameters: SuperSamplingEvaluationParameters,
+    rendering_resolution: vk::Extent2D,
+    target_resolution: vk::Extent2D,
 }
 
 impl SuperSamplingFeature {
+    /// Creates a new Super Sampling feature.
+    pub fn new(
+        feature: Feature,
+        rendering_resolution: vk::Extent2D,
+        target_resolution: vk::Extent2D,
+    ) -> Result<Self> {
+        if !feature.is_super_sampling() {
+            return Err(crate::error::Error::Other(
+                "Attempt to create a super sampling feature with another feature.".to_owned(),
+            ));
+        }
+
+        Ok(Self {
+            feature,
+            parameters: SuperSamplingEvaluationParameters::new(),
+            rendering_resolution,
+            target_resolution,
+        })
+    }
+
     /// Returns the inner feature object.
     pub fn get_inner(&self) -> &Feature {
         &self.feature
@@ -1185,32 +1221,25 @@ impl SuperSamplingFeature {
     pub fn get_inner_mut(&mut self) -> &mut Feature {
         &mut self.feature
     }
+
+    /// Returns the rendering resolution (input resolution) of the
+    /// image that needs to be upscaled to the [`Self::target_resolution`].
+    pub const fn get_rendering_resolution(&self) -> vk::Extent2D {
+        self.rendering_resolution
+    }
+
+    /// Returns the target resolution (output resolution) of the
+    /// image that the original image should be upscaled to.
+    pub const fn get_target_resolution(&self) -> vk::Extent2D {
+        self.target_resolution
+    }
+
     // /// Attempts to create the [`SuperSamplingFeature`] with the default
     // /// settings preset.
     // pub fn try_default() -> Result<Self> {
     //     let parameters = FeatureParameters::get_capability_parameters()?;
     //     Self::new(parameters)
     // }
-
-    // /// Creates a new [`SuperSamplingFeature`] with the given
-    // /// parameters.
-    // pub fn from_feature_unchecked(parameters: FeatureParameters) -> Result<Self> {}
-
-    /// Creates a new [`SuperSamplingFeature`] from the given
-    /// [`Feature`] object.
-    ///
-    /// # Safety
-    ///
-    /// The function is unsafe due to not checking the actual feature
-    /// type within the [`Feature`] provided.
-    ///
-    /// For the safe and checked version use [`std::convert::TryFrom`].
-    pub unsafe fn from_feature_unchecked(feature: Feature) -> Self {
-        Self {
-            feature,
-            parameters: SuperSamplingEvaluationParameters::default(),
-        }
-    }
 
     /// See [`FeatureParameters::is_super_sampling_initialised`].
     pub fn is_initialised(&self) -> bool {
@@ -1226,6 +1255,16 @@ impl SuperSamplingFeature {
 
     /// Evaluates the feature.
     pub fn evaluate(&mut self, command_buffer: vk::CommandBuffer) -> Result {
+        // let command_buffer = unsafe { command_buffer.to_pointer_mut() };
+        // let evaluation_parameters = self.parameters.get_dlss_evaluation_parameters();
+        // Result::from(unsafe {
+        //     bindings::HELPERS_NGX_VULKAN_EVALUATE_DLSS_EXT(
+        //         command_buffer,
+        //         self.feature.handle.0,
+        //         self.feature.parameters.0,
+        //         evaluation_parameters,
+        //     )
+        // })
         Result::from(unsafe {
             bindings::HELPERS_NGX_VULKAN_EVALUATE_DLSS_EXT(
                 command_buffer.to_pointer_mut(),
@@ -1237,19 +1276,19 @@ impl SuperSamplingFeature {
     }
 }
 
-impl TryFrom<Feature> for SuperSamplingFeature {
-    type Error = crate::Error;
+// impl TryFrom<Feature> for SuperSamplingFeature {
+//     type Error = crate::Error;
 
-    fn try_from(feature: Feature) -> Result<Self> {
-        if feature.feature_type == bindings::NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling {
-            Ok(unsafe { Self::from_feature_unchecked(feature) })
-        } else {
-            Err(crate::Error::Other(format!(
-                "The provided Feature isn't of SuperSampling type."
-            )))
-        }
-    }
-}
+//     fn try_from(feature: Feature) -> Result<Self> {
+//         if feature.feature_type == bindings::NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling {
+//             Ok(unsafe { Self::from_feature_unchecked(feature) })
+//         } else {
+//             Err(crate::Error::Other(format!(
+//                 "The provided Feature isn't of SuperSampling type."
+//             )))
+//         }
+//     }
+// }
 
 // #[derive(Debug)]
 // pub struct FeatureCommonInfo {
