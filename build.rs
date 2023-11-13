@@ -1,23 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
-enum DlssLibraryType {
-    Development,
-    Release,
-}
-// impl From<DlssLibraryType> for &'static str {
-//     fn from(value: DlssLibraryType) -> Self {
-//         match value {
-//             DlssLibraryType::Development => "dev",
-//             DlssLibraryType::Release => "rel",
-//         }
-//     }
-// }
-
 const DLSS_LIBRARY_PATH: &str = "DLSS/lib/Linux_x86_64";
-const DLSS_LIBRARY_TYPE: DlssLibraryType = DlssLibraryType::Development;
-const DLSS_LIBRARY_FILE_NAME: &str = "nvidia-ngx-dlss";
-// const HEADER_FILE_PATH: &str = "DLSS/include/nvsdk_ngx_vk.h";
 const HEADER_FILE_PATH: &str = "src/bindings.h";
 const SOURCE_FILE_PATH: &str = "src/bindings.c";
 
@@ -93,8 +77,7 @@ fn main() {
     // Tell cargo to look for shared libraries in the specified directory
     println!("cargo:rustc-link-search={}", library_path());
 
-    // Tell cargo to tell rustc to link the system bzip2
-    // shared library.
+    // Tell cargo to tell rustc to link to the libraries.
     println!("cargo:rustc-link-lib=nvsdk_ngx");
     println!("cargo:rustc-link-lib=stdc++");
     println!("cargo:rustc-link-lib=dl");

@@ -31,7 +31,7 @@ fn convert_slice_of_strings_to_cstrings(data: &[String]) -> Result<Vec<std::ffi:
         .collect();
 
     if strings.len() != data.len() {
-        return Err(format!("Couldn't convert the extensions to CStrings.").into());
+        return Err("Couldn't convert the extensions to CStrings.".into());
     }
 
     Ok(strings)
@@ -110,14 +110,14 @@ trait HandleToPointer<T> {
     /// # Safety
     ///
     /// The pointer converted isn't checked, so use it on your own risk.
-    unsafe fn to_pointer_mut(&self) -> *mut T;
+    unsafe fn as_pointer_mut(&self) -> *mut T;
 }
 
 impl<T, H> HandleToPointer<T> for H
 where
     H: Handle + Copy,
 {
-    unsafe fn to_pointer_mut(&self) -> *mut T {
+    unsafe fn as_pointer_mut(&self) -> *mut T {
         ash_handle_to_pointer_mut(self)
     }
 }
@@ -139,32 +139,26 @@ unsafe extern "C" fn get_instance_proc_addr<T>(
     instance: *mut T,
     proc_name: *const i8,
 ) -> Option<unsafe extern "C" fn()> {
-    ASH_ENTRY
-        .as_ref()
-        .map(|e| {
-            let instance = instance as *mut u8;
-            let address = instance.offset_from(std::ptr::null::<u8>());
-            let raw_handle = address as u64;
-            e.get_instance_proc_addr(vk::Instance::from_raw(raw_handle), proc_name)
-                .map(|p| std::mem::transmute(p))
-        })
-        .flatten()
+    ASH_ENTRY.as_ref().and_then(|e| {
+        let instance = instance as *mut u8;
+        let address = instance.offset_from(std::ptr::null::<u8>());
+        let raw_handle = address as u64;
+        e.get_instance_proc_addr(vk::Instance::from_raw(raw_handle), proc_name)
+            .map(|p| std::mem::transmute(p))
+    })
 }
 
 unsafe extern "C" fn get_device_proc_addr<T>(
     logical_device: *mut T,
     proc_name: *const i8,
 ) -> Option<unsafe extern "C" fn()> {
-    ASH_INSTANCE
-        .as_ref()
-        .map(|i| {
-            let logical_device = logical_device as *mut u8;
-            let address = logical_device.offset_from(std::ptr::null::<u8>());
-            let raw_handle = address as u64;
-            (i.fp_v1_0().get_device_proc_addr)(vk::Device::from_raw(raw_handle), proc_name)
-                .map(|p| std::mem::transmute(p))
-        })
-        .flatten()
+    ASH_INSTANCE.as_ref().and_then(|i| {
+        let logical_device = logical_device as *mut u8;
+        let address = logical_device.offset_from(std::ptr::null::<u8>());
+        let raw_handle = address as u64;
+        (i.fp_v1_0().get_device_proc_addr)(vk::Device::from_raw(raw_handle), proc_name)
+            .map(|p| std::mem::transmute(p))
+    })
 }
 
 impl System {
@@ -183,12 +177,9 @@ impl System {
             ASH_INSTANCE = Some(ManuallyDrop::new(instance.clone()));
         }
         let engine_type = bindings::NVSDK_NGX_EngineType::NVSDK_NGX_ENGINE_TYPE_CUSTOM;
-        let project_id = std::ffi::CString::new(
-            project_id
-                .unwrap_or_else(|| uuid::Uuid::new_v4())
-                .to_string(),
-        )
-        .unwrap();
+        let project_id =
+            std::ffi::CString::new(project_id.unwrap_or_else(uuid::Uuid::new_v4).to_string())
+                .unwrap();
         let engine_version = std::ffi::CString::new(engine_version).unwrap();
         let application_data_path =
             widestring::WideString::from_str(application_data_path.to_str().unwrap());
@@ -198,9 +189,9 @@ impl System {
                 engine_type,
                 engine_version.as_ptr(),
                 application_data_path.as_ptr().cast(),
-                instance.handle().to_pointer_mut(),
-                physical_device.to_pointer_mut(),
-                logical_device.to_pointer_mut(),
+                instance.handle().as_pointer_mut(),
+                physical_device.as_pointer_mut(),
+                logical_device.as_pointer_mut(),
                 Some(get_instance_proc_addr),
                 Some(get_device_proc_addr),
                 std::ptr::null(),
@@ -213,7 +204,7 @@ impl System {
     }
 
     fn shutdown(&self) -> Result {
-        unsafe { bindings::NVSDK_NGX_VULKAN_Shutdown1(self.device.to_pointer_mut()) }.into()
+        unsafe { bindings::NVSDK_NGX_VULKAN_Shutdown1(self.device.as_pointer_mut()) }.into()
     }
 
     /// Creates a new [`Feature`] with the logical device used to create
@@ -244,12 +235,15 @@ impl System {
             feature_parameters,
             create_parameters,
         )
-        // self.create_feature(
-        //     command_buffer,
-        //     bindings::NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling,
-        //     parameters,
-        // )
-        // .map(|f| unsafe { SuperSamplingFeature::from_feature_unchecked(f) })
+    }
+
+    /// Creates a frame generation feature.
+    pub fn create_frame_generation_feature(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        feature_parameters: FeatureParameters,
+    ) -> Result<Feature> {
+        Feature::new_frame_generation(self.device, command_buffer, feature_parameters)
     }
 }
 
@@ -284,6 +278,10 @@ impl FeatureHandle {
 
 impl Drop for FeatureHandle {
     fn drop(&mut self) {
+        if self.0.is_null() {
+            return;
+        }
+
         if let Err(e) = self.release() {
             log::error!("Couldn't release the feature handle: {:?}: {e}", self)
         }
@@ -541,7 +539,7 @@ impl FeatureParameters {
         Result::from(unsafe {
             bindings::NVSDK_NGX_Parameter_GetI(self.0, name.as_ptr().cast(), &mut value as *mut _)
         })
-        .map(|_| if value == 1 { true } else { false })
+        .map(|_| value == 1)
     }
 
     /// Sets an [f32] value for the parameter named `name`.
@@ -626,9 +624,9 @@ impl FeatureParameters {
         }
         match self.get_bool(bindings::NVSDK_NGX_Parameter_SuperSampling_Available) {
             Ok(true) => Ok(()),
-            Ok(false) => Err(crate::Error::Other(format!(
-                "The SuperSampling isn't supported on this platform."
-            ))),
+            Ok(false) => Err(crate::Error::Other(
+                "The SuperSampling feature isn't supported on this platform.".to_string(),
+            )),
             Err(e) => Err(e),
         }
     }
@@ -682,8 +680,8 @@ impl Feature {
         let mut handle = FeatureHandle::new();
         Result::from(unsafe {
             bindings::NVSDK_NGX_VULKAN_CreateFeature1(
-                device.to_pointer_mut(),
-                command_buffer.to_pointer_mut(),
+                device.as_pointer_mut(),
+                command_buffer.as_pointer_mut(),
                 feature_type,
                 parameters.0,
                 &mut handle.0 as *mut _,
@@ -703,7 +701,7 @@ impl Feature {
         parameters: FeatureParameters,
         mut super_sampling_create_parameters: SuperSamplingCreateParameters,
     ) -> Result<SuperSamplingFeature> {
-        let feature_type = bindings::NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling;
+        let feature_type = NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling;
         let rendering_resolution = vk::Extent2D::builder()
             .width(super_sampling_create_parameters.0.Feature.InWidth)
             .height(super_sampling_create_parameters.0.Feature.InHeight)
@@ -715,8 +713,8 @@ impl Feature {
         unsafe {
             let mut handle = FeatureHandle::new();
             Result::from(bindings::HELPERS_NGX_VULKAN_CREATE_DLSS_EXT1(
-                device.to_pointer_mut(),
-                command_buffer.to_pointer_mut(),
+                device.as_pointer_mut(),
+                command_buffer.as_pointer_mut(),
                 1,
                 1,
                 &mut handle.0 as *mut _,
@@ -735,6 +733,16 @@ impl Feature {
                 )
             })
         }
+    }
+
+    /// Creates the Frame Generation feature.
+    pub fn new_frame_generation(
+        device: vk::Device,
+        command_buffer: vk::CommandBuffer,
+        parameters: FeatureParameters,
+    ) -> Result<Self> {
+        let feature_type = NVSDK_NGX_Feature::NVSDK_NGX_Feature_FrameGeneration;
+        Self::new(device, command_buffer, feature_type, parameters)
     }
 
     /// Returns the parameters associated with this feature.
@@ -793,7 +801,7 @@ impl Feature {
     pub fn evaluate(&self, command_buffer: vk::CommandBuffer) -> Result {
         unsafe {
             bindings::NVSDK_NGX_VULKAN_EvaluateFeature_C(
-                command_buffer.to_pointer_mut(),
+                command_buffer.as_pointer_mut(),
                 self.handle.0,
                 self.parameters.0,
                 Some(feature_progress_callback),
@@ -883,7 +891,7 @@ impl SuperSamplingOptimalSettings {
 
         if settings.render_height == 0 || settings.render_width == 0 {
             return Err(crate::Error::Other(format!(
-                "The requested quality level isn't supported."
+                "The requested quality level isn't supported: {desired_quality_level:?}"
             )));
         }
 
@@ -1030,8 +1038,8 @@ impl From<VkImageResourceDescription> for NVSDK_NGX_Resource_VK {
         }
         let image_resource = NVSDK_NGX_Resource_VK__bindgen_ty_1 {
             ImageViewInfo: NVSDK_NGX_ImageViewInfo_VK {
-                ImageView: unsafe { value.image_view.to_pointer_mut() },
-                Image: unsafe { value.image.to_pointer_mut() },
+                ImageView: unsafe { value.image_view.as_pointer_mut() },
+                Image: unsafe { value.image.as_pointer_mut() },
                 SubresourceRange: vk_image_subresource_range,
                 Format: vk_format,
                 Width: value.width,
@@ -1255,19 +1263,9 @@ impl SuperSamplingFeature {
 
     /// Evaluates the feature.
     pub fn evaluate(&mut self, command_buffer: vk::CommandBuffer) -> Result {
-        // let command_buffer = unsafe { command_buffer.to_pointer_mut() };
-        // let evaluation_parameters = self.parameters.get_dlss_evaluation_parameters();
-        // Result::from(unsafe {
-        //     bindings::HELPERS_NGX_VULKAN_EVALUATE_DLSS_EXT(
-        //         command_buffer,
-        //         self.feature.handle.0,
-        //         self.feature.parameters.0,
-        //         evaluation_parameters,
-        //     )
-        // })
         Result::from(unsafe {
             bindings::HELPERS_NGX_VULKAN_EVALUATE_DLSS_EXT(
-                command_buffer.to_pointer_mut(),
+                command_buffer.as_pointer_mut(),
                 self.feature.handle.0,
                 self.feature.parameters.0,
                 self.parameters.get_dlss_evaluation_parameters(),
@@ -1275,20 +1273,6 @@ impl SuperSamplingFeature {
         })
     }
 }
-
-// impl TryFrom<Feature> for SuperSamplingFeature {
-//     type Error = crate::Error;
-
-//     fn try_from(feature: Feature) -> Result<Self> {
-//         if feature.feature_type == bindings::NVSDK_NGX_Feature::NVSDK_NGX_Feature_SuperSampling {
-//             Ok(unsafe { Self::from_feature_unchecked(feature) })
-//         } else {
-//             Err(crate::Error::Other(format!(
-//                 "The provided Feature isn't of SuperSampling type."
-//             )))
-//         }
-//     }
-// }
 
 // #[derive(Debug)]
 // pub struct FeatureCommonInfo {
