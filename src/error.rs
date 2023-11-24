@@ -1,7 +1,5 @@
 //! The errors the NGX crate might have.
 
-#![deny(missing_docs)]
-
 use crate::bindings;
 
 /// The result type used within the crate.

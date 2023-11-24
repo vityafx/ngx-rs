@@ -1,6 +1,4 @@
-//! Vulkan NGX.
-
-#![deny(missing_docs)]
+//! Vulkan bindings to NGX.
 
 use std::mem::ManuallyDrop;
 use std::rc::Rc;
@@ -45,6 +43,7 @@ pub struct RequiredExtensions {
     /// Vulkan instance extensions required for NVIDIA NGX.
     pub instance: Vec<String>,
 }
+
 impl RequiredExtensions {
     /// Returns a list of device extensions as a list of
     /// [`std::ffi::CString`].
@@ -460,7 +459,8 @@ impl FeatureParameters {
             .map(|_| Self(ptr))
     }
 
-    /// Get a feature parameter set populated with NGX and feature capabilities.
+    /// Get a feature parameter set populated with NGX and feature
+    /// capabilities.
     ///
     /// # NVIDIA documentation
     ///
@@ -1108,6 +1108,7 @@ impl SuperSamplingEvaluationParameters {
         description: VkImageResourceDescription,
         scale: Option<[f32; 2]>,
     ) {
+        // 1.0f32 means no scaling (they are already in the pixel space).
         const DEFAULT_SCALING: [f32; 2] = [1.0f32, 1.0f32];
 
         self.motion_vectors_resource = description.into();
