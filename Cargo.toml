@@ -1,5 +1,5 @@
 [package]
-name = "ngx"
+name = "nvngx"
 version = "0.1.0"
 edition = "2021"
 authors = ["Victor Polevoy <maintainer@vpolevoy.com>"]
