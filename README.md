@@ -13,7 +13,7 @@ A Rust wrapper over the NVIDIA NGX library.
 
 ## Supported graphics APIs
 
-- Vulkan
+- Vulkan (only the [`ash`](https://crates.io/crates/ash) backend).
 
 ## DLSS integration example
 
