@@ -32,8 +32,24 @@ fn compile_helpers() {
     // This is the path to the static library file.
     let lib_path = libdir_path.join("target/libngx_helpers.a");
 
+    let git_submodule_update_job = std::process::Command::new("git")
+        .arg("submodule")
+        .arg("update")
+        .arg("--init")
+        .arg("--recursive")
+        .arg("--depth")
+        .arg("1")
+        .output()
+        .expect("run git successfully");
+
+    if !git_submodule_update_job.status.success() {
+        let stdout = String::from_utf8(git_submodule_update_job.stdout).unwrap();
+        let stderr = String::from_utf8(git_submodule_update_job.stderr).unwrap();
+        panic!("could not checkout the submodules.\nStdout:\n{stdout}\n\nStderr:\n{stderr}");
+    }
+
     // Run `clang` to compile the source code file into an object file.
-    if !std::process::Command::new("clang")
+    let compile_job = std::process::Command::new("clang")
         .arg("-g")
         .arg("-G0")
         .arg("-c")
@@ -41,12 +57,12 @@ fn compile_helpers() {
         .arg(&obj_path)
         .arg(libdir_path.join(SOURCE_FILE_PATH))
         .output()
-        .expect("could not spawn `clang`")
-        .status
-        .success()
-    {
-        // Panic if the command was not successful.
-        panic!("could not compile object file");
+        .expect("compile using `clang`");
+
+    if !compile_job.status.success() {
+        let stdout = String::from_utf8(compile_job.stdout).unwrap();
+        let stderr = String::from_utf8(compile_job.stderr).unwrap();
+        panic!("could not compile object file.\nStdout:\n{stdout}\n\nStderr:\n{stderr}");
     }
 
     // Run `ar` to generate the static library.
