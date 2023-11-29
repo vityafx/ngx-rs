@@ -52,6 +52,13 @@ jobs:
             target
           key: ${{ runner.os }}-test-${{ steps.tc.outputs.rustc_hash }}-${{ hashFiles('**/Cargo.toml') }}
 
+      -name: Prepare Vulkan SDK
+       uses: humbletim/setup-vulkan-sdk@v1.2.0
+       with:
+         vulkan-query-version: 1.3.204.0
+           vulkan-components: Vulkan-Headers, Vulkan-Loader
+           vulkan-use-cache: true
+
       - name: Build all features
         if: matrix.features == ''
         run: cargo build --all-features
