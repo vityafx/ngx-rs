@@ -16,7 +16,7 @@ A Rust wrapper over the NVIDIA NGX library.
 - Vulkan (only the [`ash`](https://crates.io/crates/ash) backend).
 
 ## MSRV
-1.63
+1.65
 
 ## DLSS integration example
 
