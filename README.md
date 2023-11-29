@@ -1,6 +1,6 @@
-[![CI](https://github.com/vityafx/ngx-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/vityafx/ngx/actions/workflows/ci.yml)
-[![Crates](https://img.shields.io/crates/v/ngx-rs.svg)](https://crates.io/crates/ngx)
-[![Docs](https://docs.rs/ngx-rs/badge.svg)](https://docs.rs/ngx)
+[![CI](https://github.com/vityafx/nvngx-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/vityafx/nvngx/actions/workflows/ci.yml)
+[![Crates](https://img.shields.io/crates/v/nvngx-rs.svg)](https://crates.io/crates/nvngx)
+[![Docs](https://docs.rs/nvngx-rs/badge.svg)](https://docs.rs/nvngx)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 # NGX-rs
