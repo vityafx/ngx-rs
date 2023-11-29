@@ -110,7 +110,7 @@ fn main() {
         .header(HEADER_FILE_PATH)
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .impl_debug(true)
         .impl_partialeq(true)
         .prepend_enum_name(false)
