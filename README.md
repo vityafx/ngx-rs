@@ -1,4 +1,4 @@
-[![CI](https://github.com/vityafx/nvngx-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/vityafx-rs/nvngx/actions/workflows/ci.yml)
+[![CI](https://github.com/vityafx/nvngx-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/vityafx/nvngx-rs/actions/workflows/ci.yml)
 [![Crates](https://img.shields.io/crates/v/nvngx-rs.svg)](https://crates.io/crates/nvngx)
 [![Docs](https://docs.rs/nvngx-rs/badge.svg)](https://docs.rs/nvngx)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
