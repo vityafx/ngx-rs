@@ -4,3 +4,5 @@
 
 pub mod vk;
 pub use vk::*;
+
+pub use nvngx_sys as sys;
