@@ -1,6 +1,6 @@
 //! The Ray Reconstruction feature.
 
-use crate::bindings::{
+use nvngx_sys::{
     NVSDK_NGX_DLSSD_Create_Params, NVSDK_NGX_DLSS_Denoise_Mode, NVSDK_NGX_DLSS_Depth_Type,
     NVSDK_NGX_DLSS_Roughness_Mode, NVSDK_NGX_VK_DLSSD_Eval_Params,
 };
@@ -25,7 +25,7 @@ impl From<SuperSamplingOptimalSettings> for RayReconstructionCreateParameters {
 /// Create parameters for the Ray Reconstruction feature.
 #[repr(transparent)]
 #[derive(Debug)]
-pub struct RayReconstructionCreateParameters(pub(crate) bindings::NVSDK_NGX_DLSSD_Create_Params);
+pub struct RayReconstructionCreateParameters(pub(crate) nvngx_sys::NVSDK_NGX_DLSSD_Create_Params);
 
 impl RayReconstructionCreateParameters {
     /// Creates a new set of create parameters for the SuperSampling
@@ -63,7 +63,7 @@ impl RayReconstructionCreateParameters {
 
 /// The Ray Reconstruction evaluation parameters.
 ///
-/// Similar to [`crate::bindings::NVSDK_NGX_VK_DLSSD_Eval_Params`].
+/// Similar to [`crate::nvngx_sys::NVSDK_NGX_VK_DLSSD_Eval_Params`].
 #[derive(Debug)]
 pub struct RayReconstructionEvaluationParameters {
     /// The vulkan resource which is an input to the evaluation
@@ -174,7 +174,7 @@ impl RayReconstructionEvaluationParameters {
     /// Returns the filled Ray Reconstruction parameters.
     pub(crate) fn get_rr_evaluation_parameters(
         &mut self,
-    ) -> *mut bindings::NVSDK_NGX_VK_DLSSD_Eval_Params {
+    ) -> *mut nvngx_sys::NVSDK_NGX_VK_DLSSD_Eval_Params {
         std::ptr::addr_of_mut!(self.parameters)
     }
 
@@ -219,7 +219,7 @@ impl RayReconstructionFeature {
         target_resolution: vk::Extent2D,
     ) -> Result<Self> {
         if !feature.is_ray_reconstruction() {
-            return Err(crate::error::Error::Other(
+            return Err(nvngx_sys::Error::Other(
                 "Attempt to create a ray reconstruction feature with another feature.".to_owned(),
             ));
         }
@@ -276,7 +276,7 @@ impl RayReconstructionFeature {
     /// Evaluates the feature.
     pub fn evaluate(&mut self, command_buffer: vk::CommandBuffer) -> Result {
         Result::from(unsafe {
-            bindings::HELPERS_NGX_VULKAN_EVALUATE_DLSSD_EXT(
+            nvngx_sys::HELPERS_NGX_VULKAN_EVALUATE_DLSSD_EXT(
                 command_buffer.as_pointer_mut(),
                 self.feature.handle.0,
                 self.feature.parameters.0,

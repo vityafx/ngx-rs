@@ -5,7 +5,7 @@ use super::*;
 /// An NGX handle. Handle might be created and used by [`Feature::create`].
 #[repr(transparent)]
 #[derive(Debug)]
-pub struct FeatureHandle(pub(crate) *mut bindings::NVSDK_NGX_Handle);
+pub struct FeatureHandle(pub(crate) *mut nvngx_sys::NVSDK_NGX_Handle);
 
 impl Default for FeatureHandle {
     fn default() -> Self {
@@ -19,7 +19,7 @@ impl FeatureHandle {
     }
 
     fn release(&mut self) -> Result {
-        unsafe { bindings::NVSDK_NGX_VULKAN_ReleaseFeature(self.0) }.into()
+        unsafe { nvngx_sys::NVSDK_NGX_VULKAN_ReleaseFeature(self.0) }.into()
     }
 }
 
@@ -36,7 +36,7 @@ impl Drop for FeatureHandle {
 }
 
 /// A type alias for feature parameter, like
-/// [`bindings::NVSDK_NGX_Parameter_NumFrames`].
+/// [`nvngx_sys::NVSDK_NGX_Parameter_NumFrames`].
 // pub type FeatureParameterName = std::ffi::CStr;
 pub type FeatureParameterName = [u8];
 
@@ -99,7 +99,7 @@ macro_rules! insert_parameter_debug {
 
 /// Feature parameters is a collection of parameters of a feature (ha!).
 #[repr(transparent)]
-pub struct FeatureParameters(pub(crate) *mut bindings::NVSDK_NGX_Parameter);
+pub struct FeatureParameters(pub(crate) *mut nvngx_sys::NVSDK_NGX_Parameter);
 
 impl std::fmt::Debug for FeatureParameters {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -121,52 +121,64 @@ impl std::fmt::Debug for FeatureParameters {
                     insert_parameter_debug!(
                         map,
                         parameters,
+                        (nvngx_sys::NVSDK_NGX_Parameter_SuperSampling_Available, bool),
                         (
-                            crate::bindings::NVSDK_NGX_Parameter_SuperSampling_Available,
+                            nvngx_sys::NVSDK_NGX_Parameter_SuperSamplingDenoising_Available,
+                            bool
+                        ),
+                        (nvngx_sys::NVSDK_NGX_Parameter_InPainting_Available, bool),
+                        (
+                            nvngx_sys::NVSDK_NGX_Parameter_ImageSuperResolution_Available,
+                            bool
+                        ),
+                        (nvngx_sys::NVSDK_NGX_Parameter_SlowMotion_Available, bool),
+                        (
+                            nvngx_sys::NVSDK_NGX_Parameter_VideoSuperResolution_Available,
                             bool
                         ),
                         (
-                            crate::bindings::NVSDK_NGX_Parameter_SuperSamplingDenoising_Available,
+                            nvngx_sys::NVSDK_NGX_Parameter_ImageSignalProcessing_Available,
+                            bool
+                        ),
+                        (nvngx_sys::NVSDK_NGX_Parameter_DeepResolve_Available, bool),
+                        (
+                            nvngx_sys::NVSDK_NGX_Parameter_SuperSampling_NeedsUpdatedDriver,
                             bool
                         ),
                         (
-                            crate::bindings::NVSDK_NGX_Parameter_InPainting_Available,
+                            nvngx_sys::NVSDK_NGX_Parameter_InPainting_NeedsUpdatedDriver,
                             bool
                         ),
                         (
-                            crate::bindings::NVSDK_NGX_Parameter_ImageSuperResolution_Available,
+                            nvngx_sys::NVSDK_NGX_Parameter_ImageSuperResolution_NeedsUpdatedDriver,
                             bool
                         ),
                         (
-                            crate::bindings::NVSDK_NGX_Parameter_SlowMotion_Available,
+                            nvngx_sys::NVSDK_NGX_Parameter_SlowMotion_NeedsUpdatedDriver,
                             bool
                         ),
                         (
-                            crate::bindings::NVSDK_NGX_Parameter_VideoSuperResolution_Available,
+                            nvngx_sys::NVSDK_NGX_Parameter_VideoSuperResolution_NeedsUpdatedDriver,
                             bool
                         ),
                         (
-                            crate::bindings::NVSDK_NGX_Parameter_ImageSignalProcessing_Available,
-                            bool
-                        ),
-                        (crate::bindings::NVSDK_NGX_Parameter_DeepResolve_Available, bool),
-                        (crate::bindings::NVSDK_NGX_Parameter_SuperSampling_NeedsUpdatedDriver, bool),
-                        (crate::bindings::NVSDK_NGX_Parameter_InPainting_NeedsUpdatedDriver, bool),
-                        (crate::bindings::NVSDK_NGX_Parameter_ImageSuperResolution_NeedsUpdatedDriver, bool),
-                        (crate::bindings::NVSDK_NGX_Parameter_SlowMotion_NeedsUpdatedDriver, bool),
-                        (crate::bindings::NVSDK_NGX_Parameter_VideoSuperResolution_NeedsUpdatedDriver, bool),
-                        (crate::bindings::NVSDK_NGX_Parameter_ImageSignalProcessing_NeedsUpdatedDriver, bool),
-                        (crate::bindings::NVSDK_NGX_Parameter_DeepResolve_NeedsUpdatedDriver, bool),
-                        (crate::bindings::NVSDK_NGX_Parameter_FrameInterpolation_NeedsUpdatedDriver, bool),
-                        (crate::bindings::NVSDK_NGX_Parameter_NumFrames, u32),
-                        (crate::bindings::NVSDK_NGX_Parameter_Scale, u32),
-                        (crate::bindings::NVSDK_NGX_Parameter_OptLevel, u32),
-                        (
-                            crate::bindings::NVSDK_NGX_Parameter_IsDevSnippetBranch,
+                            nvngx_sys::NVSDK_NGX_Parameter_ImageSignalProcessing_NeedsUpdatedDriver,
                             bool
                         ),
                         (
-                            crate::bindings::NVSDK_NGX_Parameter_SuperSampling_ScaleFactor,
+                            nvngx_sys::NVSDK_NGX_Parameter_DeepResolve_NeedsUpdatedDriver,
+                            bool
+                        ),
+                        (
+                            nvngx_sys::NVSDK_NGX_Parameter_FrameInterpolation_NeedsUpdatedDriver,
+                            bool
+                        ),
+                        (nvngx_sys::NVSDK_NGX_Parameter_NumFrames, u32),
+                        (nvngx_sys::NVSDK_NGX_Parameter_Scale, u32),
+                        (nvngx_sys::NVSDK_NGX_Parameter_OptLevel, u32),
+                        (nvngx_sys::NVSDK_NGX_Parameter_IsDevSnippetBranch, bool),
+                        (
+                            nvngx_sys::NVSDK_NGX_Parameter_SuperSampling_ScaleFactor,
                             f32
                         ),
                     );
@@ -206,8 +218,8 @@ impl FeatureParameters {
     /// may be used as a fallback.
     /// This function may only be called after a successful call into NVSDK_NGX_Init.
     pub fn new(&self) -> Result<Self> {
-        let mut ptr: *mut bindings::NVSDK_NGX_Parameter = std::ptr::null_mut();
-        Result::from(unsafe { bindings::NVSDK_NGX_VULKAN_AllocateParameters(&mut ptr as *mut _) })
+        let mut ptr: *mut nvngx_sys::NVSDK_NGX_Parameter = std::ptr::null_mut();
+        Result::from(unsafe { nvngx_sys::NVSDK_NGX_VULKAN_AllocateParameters(&mut ptr as *mut _) })
             .map(|_| Self(ptr))
     }
 
@@ -235,9 +247,9 @@ impl FeatureParameters {
     /// NVSDK_NGX_GetParameters may be used as a fallback, to get a parameter map pre-populated
     /// with NGX capabilities and available features.
     pub fn get_capability_parameters() -> Result<Self> {
-        let mut ptr: *mut bindings::NVSDK_NGX_Parameter = std::ptr::null_mut();
+        let mut ptr: *mut nvngx_sys::NVSDK_NGX_Parameter = std::ptr::null_mut();
         Result::from(unsafe {
-            bindings::NVSDK_NGX_VULKAN_GetCapabilityParameters(&mut ptr as *mut _)
+            nvngx_sys::NVSDK_NGX_VULKAN_GetCapabilityParameters(&mut ptr as *mut _)
         })
         .map(|_| Self(ptr))
     }
@@ -246,7 +258,7 @@ impl FeatureParameters {
     /// type-erased (`void *`) pointer.
     pub fn set_ptr<T>(&self, name: &FeatureParameterName, ptr: *mut T) {
         unsafe {
-            bindings::NVSDK_NGX_Parameter_SetVoidPointer(
+            nvngx_sys::NVSDK_NGX_Parameter_SetVoidPointer(
                 self.0,
                 name.as_ptr().cast(),
                 ptr as *mut _,
@@ -259,7 +271,7 @@ impl FeatureParameters {
     pub fn get_ptr(&self, name: &FeatureParameterName) -> Result<*mut std::ffi::c_void> {
         let mut ptr = std::ptr::null_mut();
         Result::from(unsafe {
-            bindings::NVSDK_NGX_Parameter_GetVoidPointer(
+            nvngx_sys::NVSDK_NGX_Parameter_GetVoidPointer(
                 self.0,
                 name.as_ptr().cast(),
                 &mut ptr as *mut _,
@@ -274,7 +286,7 @@ impl FeatureParameters {
     /// `true` and `0` being `false`.
     pub fn set_bool(&self, name: &FeatureParameterName, value: bool) {
         unsafe {
-            bindings::NVSDK_NGX_Parameter_SetI(
+            nvngx_sys::NVSDK_NGX_Parameter_SetI(
                 self.0,
                 name.as_ptr().cast(),
                 if value { 1 } else { 0 },
@@ -289,94 +301,98 @@ impl FeatureParameters {
     pub fn get_bool(&self, name: &FeatureParameterName) -> Result<bool> {
         let mut value = 0i32;
         Result::from(unsafe {
-            bindings::NVSDK_NGX_Parameter_GetI(self.0, name.as_ptr().cast(), &mut value as *mut _)
+            nvngx_sys::NVSDK_NGX_Parameter_GetI(self.0, name.as_ptr().cast(), &mut value as *mut _)
         })
         .map(|_| value == 1)
     }
 
     /// Sets an [f32] value for the parameter named `name`.
     pub fn set_f32(&self, name: &FeatureParameterName, value: f32) {
-        unsafe { bindings::NVSDK_NGX_Parameter_SetF(self.0, name.as_ptr().cast(), value) }
+        unsafe { nvngx_sys::NVSDK_NGX_Parameter_SetF(self.0, name.as_ptr().cast(), value) }
     }
 
     /// Returns a [f32] value of a parameter named `name`.
     pub fn get_f32(&self, name: &FeatureParameterName) -> Result<f32> {
         let mut value = 0f32;
         Result::from(unsafe {
-            bindings::NVSDK_NGX_Parameter_GetF(self.0, name.as_ptr().cast(), &mut value as *mut _)
+            nvngx_sys::NVSDK_NGX_Parameter_GetF(self.0, name.as_ptr().cast(), &mut value as *mut _)
         })
         .map(|_| value)
     }
 
     /// Sets an [u32] value for the parameter named `name`.
     pub fn set_u32(&self, name: &FeatureParameterName, value: u32) {
-        unsafe { bindings::NVSDK_NGX_Parameter_SetUI(self.0, name.as_ptr().cast(), value) }
+        unsafe { nvngx_sys::NVSDK_NGX_Parameter_SetUI(self.0, name.as_ptr().cast(), value) }
     }
 
     /// Returns a [u32] value of a parameter named `name`.
     pub fn get_u32(&self, name: &FeatureParameterName) -> Result<u32> {
         let mut value = 0u32;
         Result::from(unsafe {
-            bindings::NVSDK_NGX_Parameter_GetUI(self.0, name.as_ptr().cast(), &mut value as *mut _)
+            nvngx_sys::NVSDK_NGX_Parameter_GetUI(self.0, name.as_ptr().cast(), &mut value as *mut _)
         })
         .map(|_| value)
     }
 
     /// Sets an [f64] value for the parameter named `name`.
     pub fn set_f64(&self, name: &FeatureParameterName, value: f64) {
-        unsafe { bindings::NVSDK_NGX_Parameter_SetD(self.0, name.as_ptr().cast(), value) }
+        unsafe { nvngx_sys::NVSDK_NGX_Parameter_SetD(self.0, name.as_ptr().cast(), value) }
     }
 
     /// Returns a [f64] value of a parameter named `name`.
     pub fn get_f64(&self, name: &FeatureParameterName) -> Result<f64> {
         let mut value = 0f64;
         Result::from(unsafe {
-            bindings::NVSDK_NGX_Parameter_GetD(self.0, name.as_ptr().cast(), &mut value as *mut _)
+            nvngx_sys::NVSDK_NGX_Parameter_GetD(self.0, name.as_ptr().cast(), &mut value as *mut _)
         })
         .map(|_| value)
     }
 
     /// Sets an [i32] value for the parameter named `name`.
     pub fn set_i32(&self, name: &FeatureParameterName, value: i32) {
-        unsafe { bindings::NVSDK_NGX_Parameter_SetI(self.0, name.as_ptr().cast(), value) }
+        unsafe { nvngx_sys::NVSDK_NGX_Parameter_SetI(self.0, name.as_ptr().cast(), value) }
     }
 
     /// Returns a [i32] value of a parameter named `name`.
     pub fn get_i32(&self, name: &FeatureParameterName) -> Result<i32> {
         let mut value = 0i32;
         Result::from(unsafe {
-            bindings::NVSDK_NGX_Parameter_GetI(self.0, name.as_ptr().cast(), &mut value as *mut _)
+            nvngx_sys::NVSDK_NGX_Parameter_GetI(self.0, name.as_ptr().cast(), &mut value as *mut _)
         })
         .map(|_| value)
     }
 
     /// Sets an [u64] value for the parameter named `name`.
     pub fn set_u64(&self, name: &FeatureParameterName, value: u64) {
-        unsafe { bindings::NVSDK_NGX_Parameter_SetULL(self.0, name.as_ptr().cast(), value) }
+        unsafe { nvngx_sys::NVSDK_NGX_Parameter_SetULL(self.0, name.as_ptr().cast(), value) }
     }
 
     /// Returns a [u64] value of a parameter named `name`.
     pub fn get_u64(&self, name: &FeatureParameterName) -> Result<u64> {
         let mut value = 0u64;
         Result::from(unsafe {
-            bindings::NVSDK_NGX_Parameter_GetULL(self.0, name.as_ptr().cast(), &mut value as *mut _)
+            nvngx_sys::NVSDK_NGX_Parameter_GetULL(
+                self.0,
+                name.as_ptr().cast(),
+                &mut value as *mut _,
+            )
         })
         .map(|_| value)
     }
 
     /// Returns `Ok` if the parameters claim to support the
-    /// super sampling feature ([`bindings::NVSDK_NGX_Parameter_SuperSampling_Available`]).
+    /// super sampling feature ([`nvngx_sys::NVSDK_NGX_Parameter_SuperSampling_Available`]).
     pub fn supports_super_sampling(&self) -> Result<()> {
-        if self.get_bool(bindings::NVSDK_NGX_Parameter_SuperSampling_NeedsUpdatedDriver)? {
+        if self.get_bool(nvngx_sys::NVSDK_NGX_Parameter_SuperSampling_NeedsUpdatedDriver)? {
             let major =
-                self.get_u32(bindings::NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMajor)?;
+                self.get_u32(nvngx_sys::NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMajor)?;
             let minor =
-                self.get_u32(bindings::NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMinor)?;
-            return Err(crate::Error::Other(format!("The SuperSampling feature requires a driver update. The driver version required should be higher or equal to {major}.{minor}")));
+                self.get_u32(nvngx_sys::NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMinor)?;
+            return Err(nvngx_sys::Error::Other(format!("The SuperSampling feature requires a driver update. The driver version required should be higher or equal to {major}.{minor}")));
         }
-        match self.get_bool(bindings::NVSDK_NGX_Parameter_SuperSampling_Available) {
+        match self.get_bool(nvngx_sys::NVSDK_NGX_Parameter_SuperSampling_Available) {
             Ok(true) => Ok(()),
-            Ok(false) => Err(crate::Error::Other(
+            Ok(false) => Err(nvngx_sys::Error::Other(
                 "The SuperSampling feature isn't supported on this platform.".to_string(),
             )),
             Err(e) => Err(e),
@@ -384,20 +400,22 @@ impl FeatureParameters {
     }
 
     /// Returns `Ok` if the parameters claim to support the
-    /// ray reconstruction feature ([`bindings::NVSDK_NGX_Feature_RayReconstruction`]).
+    /// ray reconstruction feature ([`nvngx_sys::NVSDK_NGX_Feature_RayReconstruction`]).
     pub fn supports_ray_reconstruction(&self) -> Result<()> {
-        if self.get_bool(bindings::NVSDK_NGX_Parameter_SuperSamplingDenoising_NeedsUpdatedDriver)? {
+        if self
+            .get_bool(nvngx_sys::NVSDK_NGX_Parameter_SuperSamplingDenoising_NeedsUpdatedDriver)?
+        {
             let major = self.get_u32(
-                bindings::NVSDK_NGX_Parameter_SuperSamplingDenoising_MinDriverVersionMajor,
+                nvngx_sys::NVSDK_NGX_Parameter_SuperSamplingDenoising_MinDriverVersionMajor,
             )?;
             let minor = self.get_u32(
-                bindings::NVSDK_NGX_Parameter_SuperSamplingDenoising_MinDriverVersionMinor,
+                nvngx_sys::NVSDK_NGX_Parameter_SuperSamplingDenoising_MinDriverVersionMinor,
             )?;
-            return Err(crate::Error::Other(format!("The Ray Reconstruction feature requires a driver update. The driver version required should be higher or equal to {major}.{minor}")));
+            return Err(nvngx_sys::Error::Other(format!("The Ray Reconstruction feature requires a driver update. The driver version required should be higher or equal to {major}.{minor}")));
         }
-        match self.get_bool(bindings::NVSDK_NGX_Parameter_SuperSamplingDenoising_Available) {
+        match self.get_bool(nvngx_sys::NVSDK_NGX_Parameter_SuperSamplingDenoising_Available) {
             Ok(true) => Ok(()),
-            Ok(false) => Err(crate::Error::Other(
+            Ok(false) => Err(nvngx_sys::Error::Other(
                 "The Ray Reconstruction feature isn't supported on this platform.".to_string(),
             )),
             Err(e) => Err(e),
@@ -405,13 +423,13 @@ impl FeatureParameters {
     }
 
     /// Returns `Ok` if the parameters claim to support the
-    /// super sampling feature ([`bindings::NVSDK_NGX_Parameter_SuperSampling_Available`]).
+    /// super sampling feature ([`nvngx_sys::NVSDK_NGX_Parameter_SuperSampling_Available`]).
     pub fn supports_super_sampling_static() -> Result<()> {
         Self::get_capability_parameters()?.supports_super_sampling()
     }
 
     /// Returns `Ok` if the parameters claim to support the
-    /// super sampling feature ([`bindings::NVSDK_NGX_Parameter_SuperSampling_Available`]).
+    /// super sampling feature ([`nvngx_sys::NVSDK_NGX_Parameter_SuperSampling_Available`]).
     pub fn supports_ray_reconstruction_static() -> Result<()> {
         Self::get_capability_parameters()?.supports_ray_reconstruction()
     }
@@ -419,20 +437,20 @@ impl FeatureParameters {
     /// Returns `true` if the SuperSampling feature is initialised
     /// correctly.
     pub fn is_super_sampling_initialised(&self) -> bool {
-        self.get_bool(bindings::NVSDK_NGX_Parameter_SuperSampling_FeatureInitResult)
+        self.get_bool(nvngx_sys::NVSDK_NGX_Parameter_SuperSampling_FeatureInitResult)
             .unwrap_or(false)
     }
 
     /// Returns `true` if the Ray Reconstruction feature is initialised
     /// correctly.
     pub fn is_ray_reconstruction_initialised(&self) -> bool {
-        self.get_bool(bindings::NVSDK_NGX_Parameter_SuperSamplingDenoising_FeatureInitResult)
+        self.get_bool(nvngx_sys::NVSDK_NGX_Parameter_SuperSamplingDenoising_FeatureInitResult)
             .unwrap_or(false)
     }
 
     /// Deallocates the feature parameter set.
     fn release(&self) -> Result {
-        unsafe { bindings::NVSDK_NGX_VULKAN_DestroyParameters(self.0) }.into()
+        unsafe { nvngx_sys::NVSDK_NGX_VULKAN_DestroyParameters(self.0) }.into()
     }
 }
 
@@ -453,7 +471,7 @@ pub struct Feature {
     /// The feature handle.
     pub handle: Rc<FeatureHandle>,
     /// The type of the feature.
-    pub feature_type: bindings::NVSDK_NGX_Feature,
+    pub feature_type: nvngx_sys::NVSDK_NGX_Feature,
     /// The parameters of the feature.
     pub parameters: Rc<FeatureParameters>,
 }
@@ -463,12 +481,12 @@ impl Feature {
     pub fn new(
         device: vk::Device,
         command_buffer: vk::CommandBuffer,
-        feature_type: bindings::NVSDK_NGX_Feature,
+        feature_type: nvngx_sys::NVSDK_NGX_Feature,
         parameters: FeatureParameters,
     ) -> Result<Self> {
         let mut handle = FeatureHandle::new();
         Result::from(unsafe {
-            bindings::NVSDK_NGX_VULKAN_CreateFeature1(
+            nvngx_sys::NVSDK_NGX_VULKAN_CreateFeature1(
                 device.as_pointer_mut(),
                 command_buffer.as_pointer_mut(),
                 feature_type,
@@ -501,7 +519,7 @@ impl Feature {
             .build();
         unsafe {
             let mut handle = FeatureHandle::new();
-            Result::from(bindings::HELPERS_NGX_VULKAN_CREATE_DLSS_EXT1(
+            Result::from(nvngx_sys::HELPERS_NGX_VULKAN_CREATE_DLSS_EXT1(
                 device.as_pointer_mut(),
                 command_buffer.as_pointer_mut(),
                 1,
@@ -553,7 +571,7 @@ impl Feature {
 
         unsafe {
             let mut handle = FeatureHandle::new();
-            Result::from(bindings::HELPERS_NGX_VULKAN_CREATE_DLSSD_EXT1(
+            Result::from(nvngx_sys::HELPERS_NGX_VULKAN_CREATE_DLSSD_EXT1(
                 device.as_pointer_mut(),
                 command_buffer.as_pointer_mut(),
                 1,
@@ -621,7 +639,7 @@ impl Feature {
     pub fn get_scratch_buffer_size(&self) -> Result<usize> {
         let mut size = 0usize;
         Result::from(unsafe {
-            bindings::NVSDK_NGX_VULKAN_GetScratchBufferSize(
+            nvngx_sys::NVSDK_NGX_VULKAN_GetScratchBufferSize(
                 self.feature_type,
                 self.parameters.0 as _,
                 &mut size as *mut _,
@@ -641,7 +659,7 @@ impl Feature {
     /// albedo, normals, depth etc)
     pub fn evaluate(&self, command_buffer: vk::CommandBuffer) -> Result {
         unsafe {
-            bindings::NVSDK_NGX_VULKAN_EvaluateFeature_C(
+            nvngx_sys::NVSDK_NGX_VULKAN_EvaluateFeature_C(
                 command_buffer.as_pointer_mut(),
                 self.handle.0,
                 self.parameters.0,
@@ -659,4 +677,4 @@ unsafe extern "C" fn feature_progress_callback(progress: f32, _should_cancel: *m
 /// Describes a set of NGX feature requirements.
 #[repr(transparent)]
 #[derive(Debug)]
-pub struct FeatureRequirement(bindings::NVSDK_NGX_FeatureRequirement);
+pub struct FeatureRequirement(nvngx_sys::NVSDK_NGX_FeatureRequirement);

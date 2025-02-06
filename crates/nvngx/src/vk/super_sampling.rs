@@ -1,6 +1,6 @@
 //! Describes and implements the interface for the DLSS feature.
 
-use crate::bindings::{
+use nvngx_sys::{
     NVSDK_NGX_DLSS_Create_Params, NVSDK_NGX_DLSS_Feature_Flags, NVSDK_NGX_VK_DLSS_Eval_Params,
 };
 
@@ -26,7 +26,7 @@ pub struct SuperSamplingOptimalSettings {
     /// will upscale to.
     pub target_height: u32,
     /// The requested quality level.
-    pub desired_quality_level: bindings::NVSDK_NGX_PerfQuality_Value,
+    pub desired_quality_level: nvngx_sys::NVSDK_NGX_PerfQuality_Value,
     /// TODO:
     pub dynamic_min_render_width: u32,
     /// TODO:
@@ -44,7 +44,7 @@ impl SuperSamplingOptimalSettings {
         parameters: &FeatureParameters,
         target_width: u32,
         target_height: u32,
-        desired_quality_level: bindings::NVSDK_NGX_PerfQuality_Value,
+        desired_quality_level: nvngx_sys::NVSDK_NGX_PerfQuality_Value,
     ) -> Result<Self> {
         let mut settings = Self {
             render_width: 0,
@@ -60,7 +60,7 @@ impl SuperSamplingOptimalSettings {
         // The sharpness is deprecated, should stay zero.
         let mut sharpness = 0.0f32;
         Result::from(unsafe {
-            bindings::HELPERS_NGX_DLSS_GET_OPTIMAL_SETTINGS(
+            nvngx_sys::HELPERS_NGX_DLSS_GET_OPTIMAL_SETTINGS(
                 parameters.0,
                 settings.target_width,
                 settings.target_height,
@@ -76,7 +76,7 @@ impl SuperSamplingOptimalSettings {
         })?;
 
         if settings.render_height == 0 || settings.render_width == 0 {
-            return Err(crate::Error::Other(format!(
+            return Err(nvngx_sys::Error::Other(format!(
                 "The requested quality level isn't supported: {desired_quality_level:?}"
             )));
         }
@@ -88,7 +88,7 @@ impl SuperSamplingOptimalSettings {
 /// Create parameters for the SuperSampling feature.
 #[repr(transparent)]
 #[derive(Debug)]
-pub struct SuperSamplingCreateParameters(pub(crate) bindings::NVSDK_NGX_DLSS_Create_Params);
+pub struct SuperSamplingCreateParameters(pub(crate) nvngx_sys::NVSDK_NGX_DLSS_Create_Params);
 
 impl SuperSamplingCreateParameters {
     /// Creates a new set of create parameters for the SuperSampling
@@ -134,26 +134,26 @@ impl From<SuperSamplingOptimalSettings> for SuperSamplingCreateParameters {
 // #[derive(Debug, derive_builder::Builder)]
 // pub struct SuperSamplingEvaluationParametersSimple {
 //     /// The feature evaluation parameters, specific to Vulkan.
-//     feature_evaluation_parameters: bindings::NVSDK_NGX_VK_Feature_Eval_Params,
+//     feature_evaluation_parameters: nvngx_sys::NVSDK_NGX_VK_Feature_Eval_Params,
 //     /// The depth information.
-//     depth: bindings::NVSDK_NGX_Resource_VK,
+//     depth: nvngx_sys::NVSDK_NGX_Resource_VK,
 //     /// The motion vectors.
-//     motion_vectors: bindings::NVSDK_NGX_Resource_VK,
+//     motion_vectors: nvngx_sys::NVSDK_NGX_Resource_VK,
 //     /// Jitter offset x.
 //     jitter_offset_x: f32,
 //     /// Jitter offset y.
 //     jitter_offset_y: f32,
 //     /// The dimensions of the viewport.
-//     dimensions: bindings::NVSDK_NGX_Dimensions,
+//     dimensions: nvngx_sys::NVSDK_NGX_Dimensions,
 // }
 
 // impl From<SuperSamplingEvaluationParametersSimple> for SuperSamplingEvaluationParameters {
 //     fn from(value: SuperSamplingEvaluationParametersSimple) -> Self {
-//         let mut params: bindings::NVSDK_NGX_VK_DLSS_Eval_Params = unsafe { std::mem::zeroed() };
+//         let mut params: nvngx_sys::NVSDK_NGX_VK_DLSS_Eval_Params = unsafe { std::mem::zeroed() };
 //         params.Feature = value.feature_evaluation_parameters;
 //         params.pInDepth = value.depth;
 //         unsafe {
-//             bindings::HELPERS_NVSDK_NGX_Create_ImageView_Resource_VK(imageView, image, subresourceRange, format, width, height, readWrite)
+//             nvngx_sys::HELPERS_NVSDK_NGX_Create_ImageView_Resource_VK(imageView, image, subresourceRange, format, width, height, readWrite)
 //         }
 //         Self(params)
 //     }
@@ -270,7 +270,7 @@ impl SuperSamplingEvaluationParameters {
     /// Returns the filled DLSS parameters.
     pub(crate) fn get_dlss_evaluation_parameters(
         &mut self,
-    ) -> *mut bindings::NVSDK_NGX_VK_DLSS_Eval_Params {
+    ) -> *mut nvngx_sys::NVSDK_NGX_VK_DLSS_Eval_Params {
         std::ptr::addr_of_mut!(self.parameters)
     }
 
@@ -312,7 +312,7 @@ impl SuperSamplingFeature {
         target_resolution: vk::Extent2D,
     ) -> Result<Self> {
         if !feature.is_super_sampling() {
-            return Err(crate::error::Error::Other(
+            return Err(nvngx_sys::Error::Other(
                 "Attempt to create a super sampling feature with another feature.".to_owned(),
             ));
         }
@@ -369,7 +369,7 @@ impl SuperSamplingFeature {
     /// Evaluates the feature.
     pub fn evaluate(&mut self, command_buffer: vk::CommandBuffer) -> Result {
         Result::from(unsafe {
-            bindings::HELPERS_NGX_VULKAN_EVALUATE_DLSS_EXT(
+            nvngx_sys::HELPERS_NGX_VULKAN_EVALUATE_DLSS_EXT(
                 command_buffer.as_pointer_mut(),
                 self.feature.handle.0,
                 self.feature.parameters.0,

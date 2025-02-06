@@ -3,14 +3,12 @@
 use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
-use crate::bindings::{
-    self, NVSDK_NGX_Dimensions, NVSDK_NGX_Feature, NVSDK_NGX_ImageViewInfo_VK,
-    NVSDK_NGX_PerfQuality_Value, NVSDK_NGX_Resource_VK_Type, NVSDK_NGX_Resource_VK__bindgen_ty_1,
-    VkFormat, VkImageSubresourceRange,
-};
-use crate::bindings::{NVSDK_NGX_Coordinates, NVSDK_NGX_Resource_VK};
-use crate::Result;
 use ash::vk::{self, Handle};
+use nvngx_sys::{
+    NVSDK_NGX_Coordinates, NVSDK_NGX_Dimensions, NVSDK_NGX_Feature, NVSDK_NGX_ImageViewInfo_VK,
+    NVSDK_NGX_PerfQuality_Value, NVSDK_NGX_Resource_VK, NVSDK_NGX_Resource_VK_Type,
+    NVSDK_NGX_Resource_VK__bindgen_ty_1, Result, VkFormat, VkImageSubresourceRange,
+};
 
 pub mod feature;
 pub use feature::*;
@@ -70,7 +68,7 @@ impl RequiredExtensions {
         let mut instance_count = 0u32;
         let mut device_count = 0u32;
         Result::from(unsafe {
-            bindings::NVSDK_NGX_VULKAN_RequiredExtensions(
+            nvngx_sys::NVSDK_NGX_VULKAN_RequiredExtensions(
                 &mut instance_count as *mut _,
                 &mut instance_extensions as *mut _,
                 &mut device_count as *mut _,
@@ -181,7 +179,7 @@ impl System {
             ASH_ENTRY = Some(ManuallyDrop::new(entry.clone()));
             ASH_INSTANCE = Some(ManuallyDrop::new(instance.clone()));
         }
-        let engine_type = bindings::NVSDK_NGX_EngineType::NVSDK_NGX_ENGINE_TYPE_CUSTOM;
+        let engine_type = nvngx_sys::NVSDK_NGX_EngineType::NVSDK_NGX_ENGINE_TYPE_CUSTOM;
         let project_id =
             std::ffi::CString::new(project_id.unwrap_or_else(uuid::Uuid::new_v4).to_string())
                 .unwrap();
@@ -189,7 +187,7 @@ impl System {
         let application_data_path =
             widestring::WideString::from_str(application_data_path.to_str().unwrap());
         Result::from(unsafe {
-            bindings::NVSDK_NGX_VULKAN_Init_with_ProjectID(
+            nvngx_sys::NVSDK_NGX_VULKAN_Init_with_ProjectID(
                 project_id.as_ptr(),
                 engine_type,
                 engine_version.as_ptr(),
@@ -200,7 +198,7 @@ impl System {
                 Some(get_instance_proc_addr),
                 Some(get_device_proc_addr),
                 std::ptr::null(),
-                bindings::NVSDK_NGX_Version::NVSDK_NGX_Version_API,
+                nvngx_sys::NVSDK_NGX_Version::NVSDK_NGX_Version_API,
             )
         })
         .map(|_| Self {
@@ -209,7 +207,7 @@ impl System {
     }
 
     fn shutdown(&self) -> Result {
-        unsafe { bindings::NVSDK_NGX_VULKAN_Shutdown1(self.device.as_pointer_mut()) }.into()
+        unsafe { nvngx_sys::NVSDK_NGX_VULKAN_Shutdown1(self.device.as_pointer_mut()) }.into()
     }
 
     /// Creates a new [`Feature`] with the logical device used to create
@@ -217,7 +215,7 @@ impl System {
     pub fn create_feature(
         &self,
         command_buffer: vk::CommandBuffer,
-        feature_type: bindings::NVSDK_NGX_Feature,
+        feature_type: nvngx_sys::NVSDK_NGX_Feature,
         parameters: Option<FeatureParameters>,
     ) -> Result<Feature> {
         let parameters = match parameters {
@@ -427,17 +425,14 @@ mod tests {
         crate::insert_parameter_debug!(
             map,
             parameters,
-            (crate::bindings::NVSDK_NGX_EParameter_Reserved00, i32),
+            (nvngx_sys::NVSDK_NGX_EParameter_Reserved00, i32),
             (
-                crate::bindings::NVSDK_NGX_EParameter_SuperSampling_Available,
+                nvngx_sys::NVSDK_NGX_EParameter_SuperSampling_Available,
                 bool
             ),
+            (nvngx_sys::NVSDK_NGX_EParameter_InPainting_Available, bool),
             (
-                crate::bindings::NVSDK_NGX_EParameter_InPainting_Available,
-                bool
-            ),
-            (
-                crate::bindings::NVSDK_NGX_EParameter_ImageSuperResolution_Available,
+                nvngx_sys::NVSDK_NGX_EParameter_ImageSuperResolution_Available,
                 bool
             ),
         );
